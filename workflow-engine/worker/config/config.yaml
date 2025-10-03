@@ -1,0 +1,27 @@
+worker:
+  name: "loan_approval_worker"
+  endpoint: "localhost:9191"
+  port: "9191"
+
+servers:
+  # List of server endpoints for load balancing
+  endpoints:
+    - address: "localhost:9090"
+      name: "workflow-engine-1"
+      weight: 1
+    - address: "localhost:9091"
+      name: "workflow-engine-2"
+      weight: 1
+    - address: "localhost:9092"
+      name: "workflow-engine-3"
+      weight: 1
+  
+  # Load balancing strategy: round_robin, random, weighted_round_robin
+  load_balancing:
+    strategy: "round_robin"
+    health_check_interval: "30s"
+    connection_timeout: "5s"
+    retry_attempts: 3
+
+logging:
+  level: "info"

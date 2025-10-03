@@ -1,0 +1,87 @@
+syntax = "proto3";
+
+package workflow.v1;
+
+option go_package = "./proto";
+
+// Message definitions
+message RegisterEndpointRequest {
+  string name = 1;
+  string endpoint = 2;
+}
+
+message RegisterEndpointResponse {
+  bool success = 1;
+  string message = 2;
+  int64 endpoint_id = 3;
+}
+
+message WorkflowExecutionRequest {
+  string workflow_name = 1;
+  string request_id = 2;
+  string payload = 3; // JSON payload
+}
+
+message WorkflowExecutionResponse {
+  bool success = 1;
+  string message = 2;
+  int64 workflow_id = 3;
+}
+
+message StateUpdateRequest {
+  int64 workflow_id = 1;
+  string state_name = 2;
+  string state_type = 3; // "task" or "condition"
+  string status = 4; // "p" (pending), "s" (success), "f" (failed)
+  string data = 5; // JSON data for variables
+}
+
+message StateUpdateResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message WorkflowCompleteRequest {
+  int64 workflow_id = 1;
+  string status = 2; // "s" (success), "f" (failed)
+  string variables = 3; // Final variables as JSON
+}
+
+message WorkflowCompleteResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message WorkflowStreamRequest {
+  oneof message_type {
+    WorkflowExecutionRequest execution_request = 1;
+    StateUpdateRequest state_update = 2;
+    WorkflowCompleteRequest workflow_complete = 3;
+  }
+}
+
+message WorkflowStreamResponse {
+  oneof message_type {
+    StateUpdateResponse state_response = 1;
+    WorkflowExecutionResponse execution_response = 2;
+    WorkflowCompleteResponse complete_response = 3;
+  }
+}
+
+// Service definitions
+service WorkflowService {
+  // Unary RPC for endpoint registration
+  rpc RegisterEndpoint(RegisterEndpointRequest) returns (RegisterEndpointResponse);
+
+  // Bidirectional streaming for workflow execution and state updates (server initiates to worker)
+  rpc WorkflowStream(stream WorkflowStreamRequest) returns (stream WorkflowStreamResponse);
+}
+
+// Worker service - implemented by workers to receive workflow execution requests
+service WorkerService {
+  // Unary RPC to trigger workflow execution (server calls worker)
+  rpc StartWorkflow(WorkflowExecutionRequest) returns (WorkflowExecutionResponse);
+
+  // Bidirectional streaming for workflow execution (worker connects to server after StartWorkflow)
+  rpc ExecuteWorkflow(stream WorkflowStreamResponse) returns (stream WorkflowStreamRequest);
+}

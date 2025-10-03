@@ -3,7 +3,7 @@ package user.v1;
 
 import "google/protobuf/timestamp.proto";
 
-option go_package = "coding2fun.in/grpc-users/pkg/proto/user/v1";
+option go_package = "coding2fun.in/grpc-users/pkg/user/v1;userv1";
 
 // User message definition
 message User {
