@@ -21,131 +21,20 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// Message definitions
-type RegisterEndpointRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Endpoint      string                 `protobuf:"bytes,2,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *RegisterEndpointRequest) Reset() {
-	*x = RegisterEndpointRequest{}
-	mi := &file_proto_workflow_proto_msgTypes[0]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *RegisterEndpointRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RegisterEndpointRequest) ProtoMessage() {}
-
-func (x *RegisterEndpointRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_workflow_proto_msgTypes[0]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RegisterEndpointRequest.ProtoReflect.Descriptor instead.
-func (*RegisterEndpointRequest) Descriptor() ([]byte, []int) {
-	return file_proto_workflow_proto_rawDescGZIP(), []int{0}
-}
-
-func (x *RegisterEndpointRequest) GetName() string {
-	if x != nil {
-		return x.Name
-	}
-	return ""
-}
-
-func (x *RegisterEndpointRequest) GetEndpoint() string {
-	if x != nil {
-		return x.Endpoint
-	}
-	return ""
-}
-
-type RegisterEndpointResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
-	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
-	EndpointId    int64                  `protobuf:"varint,3,opt,name=endpoint_id,json=endpointId,proto3" json:"endpoint_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *RegisterEndpointResponse) Reset() {
-	*x = RegisterEndpointResponse{}
-	mi := &file_proto_workflow_proto_msgTypes[1]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *RegisterEndpointResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RegisterEndpointResponse) ProtoMessage() {}
-
-func (x *RegisterEndpointResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_workflow_proto_msgTypes[1]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RegisterEndpointResponse.ProtoReflect.Descriptor instead.
-func (*RegisterEndpointResponse) Descriptor() ([]byte, []int) {
-	return file_proto_workflow_proto_rawDescGZIP(), []int{1}
-}
-
-func (x *RegisterEndpointResponse) GetSuccess() bool {
-	if x != nil {
-		return x.Success
-	}
-	return false
-}
-
-func (x *RegisterEndpointResponse) GetMessage() string {
-	if x != nil {
-		return x.Message
-	}
-	return ""
-}
-
-func (x *RegisterEndpointResponse) GetEndpointId() int64 {
-	if x != nil {
-		return x.EndpointId
-	}
-	return 0
-}
-
+// Core workflow execution request
 type WorkflowExecutionRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	WorkflowName  string                 `protobuf:"bytes,1,opt,name=workflow_name,json=workflowName,proto3" json:"workflow_name,omitempty"`
 	RequestId     string                 `protobuf:"bytes,2,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	Payload       string                 `protobuf:"bytes,3,opt,name=payload,proto3" json:"payload,omitempty"` // JSON payload
+	Payload       string                 `protobuf:"bytes,3,opt,name=payload,proto3" json:"payload,omitempty"`                          // JSON payload
+	WorkflowId    int64                  `protobuf:"varint,4,opt,name=workflow_id,json=workflowId,proto3" json:"workflow_id,omitempty"` // Database workflow ID
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *WorkflowExecutionRequest) Reset() {
 	*x = WorkflowExecutionRequest{}
-	mi := &file_proto_workflow_proto_msgTypes[2]
+	mi := &file_proto_workflow_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -157,7 +46,7 @@ func (x *WorkflowExecutionRequest) String() string {
 func (*WorkflowExecutionRequest) ProtoMessage() {}
 
 func (x *WorkflowExecutionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_workflow_proto_msgTypes[2]
+	mi := &file_proto_workflow_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -170,7 +59,7 @@ func (x *WorkflowExecutionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowExecutionRequest.ProtoReflect.Descriptor instead.
 func (*WorkflowExecutionRequest) Descriptor() ([]byte, []int) {
-	return file_proto_workflow_proto_rawDescGZIP(), []int{2}
+	return file_proto_workflow_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *WorkflowExecutionRequest) GetWorkflowName() string {
@@ -194,6 +83,14 @@ func (x *WorkflowExecutionRequest) GetPayload() string {
 	return ""
 }
 
+func (x *WorkflowExecutionRequest) GetWorkflowId() int64 {
+	if x != nil {
+		return x.WorkflowId
+	}
+	return 0
+}
+
+// Response acknowledging workflow execution started
 type WorkflowExecutionResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
@@ -205,7 +102,7 @@ type WorkflowExecutionResponse struct {
 
 func (x *WorkflowExecutionResponse) Reset() {
 	*x = WorkflowExecutionResponse{}
-	mi := &file_proto_workflow_proto_msgTypes[3]
+	mi := &file_proto_workflow_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -217,7 +114,7 @@ func (x *WorkflowExecutionResponse) String() string {
 func (*WorkflowExecutionResponse) ProtoMessage() {}
 
 func (x *WorkflowExecutionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_workflow_proto_msgTypes[3]
+	mi := &file_proto_workflow_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -230,7 +127,7 @@ func (x *WorkflowExecutionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowExecutionResponse.ProtoReflect.Descriptor instead.
 func (*WorkflowExecutionResponse) Descriptor() ([]byte, []int) {
-	return file_proto_workflow_proto_rawDescGZIP(), []int{3}
+	return file_proto_workflow_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *WorkflowExecutionResponse) GetSuccess() bool {
@@ -254,12 +151,13 @@ func (x *WorkflowExecutionResponse) GetWorkflowId() int64 {
 	return 0
 }
 
+// State update sent from worker to server
 type StateUpdateRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	WorkflowId    int64                  `protobuf:"varint,1,opt,name=workflow_id,json=workflowId,proto3" json:"workflow_id,omitempty"`
 	StateName     string                 `protobuf:"bytes,2,opt,name=state_name,json=stateName,proto3" json:"state_name,omitempty"`
 	StateType     string                 `protobuf:"bytes,3,opt,name=state_type,json=stateType,proto3" json:"state_type,omitempty"` // "task" or "condition"
-	Status        string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`                        // "p" (pending), "s" (success), "f" (failed)
+	Status        string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`                        // "pending", "success", "failed"
 	Data          string                 `protobuf:"bytes,5,opt,name=data,proto3" json:"data,omitempty"`                            // JSON data for variables
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -267,7 +165,7 @@ type StateUpdateRequest struct {
 
 func (x *StateUpdateRequest) Reset() {
 	*x = StateUpdateRequest{}
-	mi := &file_proto_workflow_proto_msgTypes[4]
+	mi := &file_proto_workflow_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -279,7 +177,7 @@ func (x *StateUpdateRequest) String() string {
 func (*StateUpdateRequest) ProtoMessage() {}
 
 func (x *StateUpdateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_workflow_proto_msgTypes[4]
+	mi := &file_proto_workflow_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -292,7 +190,7 @@ func (x *StateUpdateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StateUpdateRequest.ProtoReflect.Descriptor instead.
 func (*StateUpdateRequest) Descriptor() ([]byte, []int) {
-	return file_proto_workflow_proto_rawDescGZIP(), []int{4}
+	return file_proto_workflow_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *StateUpdateRequest) GetWorkflowId() int64 {
@@ -330,62 +228,11 @@ func (x *StateUpdateRequest) GetData() string {
 	return ""
 }
 
-type StateUpdateResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
-	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *StateUpdateResponse) Reset() {
-	*x = StateUpdateResponse{}
-	mi := &file_proto_workflow_proto_msgTypes[5]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *StateUpdateResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*StateUpdateResponse) ProtoMessage() {}
-
-func (x *StateUpdateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_workflow_proto_msgTypes[5]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use StateUpdateResponse.ProtoReflect.Descriptor instead.
-func (*StateUpdateResponse) Descriptor() ([]byte, []int) {
-	return file_proto_workflow_proto_rawDescGZIP(), []int{5}
-}
-
-func (x *StateUpdateResponse) GetSuccess() bool {
-	if x != nil {
-		return x.Success
-	}
-	return false
-}
-
-func (x *StateUpdateResponse) GetMessage() string {
-	if x != nil {
-		return x.Message
-	}
-	return ""
-}
-
+// Workflow completion sent from worker to server
 type WorkflowCompleteRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	WorkflowId    int64                  `protobuf:"varint,1,opt,name=workflow_id,json=workflowId,proto3" json:"workflow_id,omitempty"`
-	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`       // "s" (success), "f" (failed)
+	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`       // "success" or "failed"
 	Variables     string                 `protobuf:"bytes,3,opt,name=variables,proto3" json:"variables,omitempty"` // Final variables as JSON
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -393,7 +240,7 @@ type WorkflowCompleteRequest struct {
 
 func (x *WorkflowCompleteRequest) Reset() {
 	*x = WorkflowCompleteRequest{}
-	mi := &file_proto_workflow_proto_msgTypes[6]
+	mi := &file_proto_workflow_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -405,7 +252,7 @@ func (x *WorkflowCompleteRequest) String() string {
 func (*WorkflowCompleteRequest) ProtoMessage() {}
 
 func (x *WorkflowCompleteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_workflow_proto_msgTypes[6]
+	mi := &file_proto_workflow_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -418,7 +265,7 @@ func (x *WorkflowCompleteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkflowCompleteRequest.ProtoReflect.Descriptor instead.
 func (*WorkflowCompleteRequest) Descriptor() ([]byte, []int) {
-	return file_proto_workflow_proto_rawDescGZIP(), []int{6}
+	return file_proto_workflow_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *WorkflowCompleteRequest) GetWorkflowId() int64 {
@@ -442,29 +289,28 @@ func (x *WorkflowCompleteRequest) GetVariables() string {
 	return ""
 }
 
-type WorkflowCompleteResponse struct {
+// Health check for workers
+type HealthCheckRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
-	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *WorkflowCompleteResponse) Reset() {
-	*x = WorkflowCompleteResponse{}
-	mi := &file_proto_workflow_proto_msgTypes[7]
+func (x *HealthCheckRequest) Reset() {
+	*x = HealthCheckRequest{}
+	mi := &file_proto_workflow_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *WorkflowCompleteResponse) String() string {
+func (x *HealthCheckRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*WorkflowCompleteResponse) ProtoMessage() {}
+func (*HealthCheckRequest) ProtoMessage() {}
 
-func (x *WorkflowCompleteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_workflow_proto_msgTypes[7]
+func (x *HealthCheckRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_workflow_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -475,52 +321,97 @@ func (x *WorkflowCompleteResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use WorkflowCompleteResponse.ProtoReflect.Descriptor instead.
-func (*WorkflowCompleteResponse) Descriptor() ([]byte, []int) {
-	return file_proto_workflow_proto_rawDescGZIP(), []int{7}
+// Deprecated: Use HealthCheckRequest.ProtoReflect.Descriptor instead.
+func (*HealthCheckRequest) Descriptor() ([]byte, []int) {
+	return file_proto_workflow_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *WorkflowCompleteResponse) GetSuccess() bool {
+type HealthCheckResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Healthy       bool                   `protobuf:"varint,1,opt,name=healthy,proto3" json:"healthy,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	Metadata      map[string]string      `protobuf:"bytes,3,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HealthCheckResponse) Reset() {
+	*x = HealthCheckResponse{}
+	mi := &file_proto_workflow_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HealthCheckResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HealthCheckResponse) ProtoMessage() {}
+
+func (x *HealthCheckResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_workflow_proto_msgTypes[5]
 	if x != nil {
-		return x.Success
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HealthCheckResponse.ProtoReflect.Descriptor instead.
+func (*HealthCheckResponse) Descriptor() ([]byte, []int) {
+	return file_proto_workflow_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *HealthCheckResponse) GetHealthy() bool {
+	if x != nil {
+		return x.Healthy
 	}
 	return false
 }
 
-func (x *WorkflowCompleteResponse) GetMessage() string {
+func (x *HealthCheckResponse) GetMessage() string {
 	if x != nil {
 		return x.Message
 	}
 	return ""
 }
 
-type WorkflowStreamRequest struct {
+func (x *HealthCheckResponse) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
+// Server-to-Worker messages (server sends these to worker)
+type ServerToWorkerMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to MessageType:
 	//
-	//	*WorkflowStreamRequest_ExecutionRequest
-	//	*WorkflowStreamRequest_StateUpdate
-	//	*WorkflowStreamRequest_WorkflowComplete
-	MessageType   isWorkflowStreamRequest_MessageType `protobuf_oneof:"message_type"`
+	//	*ServerToWorkerMessage_ExecutionRequest
+	MessageType   isServerToWorkerMessage_MessageType `protobuf_oneof:"message_type"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *WorkflowStreamRequest) Reset() {
-	*x = WorkflowStreamRequest{}
-	mi := &file_proto_workflow_proto_msgTypes[8]
+func (x *ServerToWorkerMessage) Reset() {
+	*x = ServerToWorkerMessage{}
+	mi := &file_proto_workflow_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *WorkflowStreamRequest) String() string {
+func (x *ServerToWorkerMessage) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*WorkflowStreamRequest) ProtoMessage() {}
+func (*ServerToWorkerMessage) ProtoMessage() {}
 
-func (x *WorkflowStreamRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_workflow_proto_msgTypes[8]
+func (x *ServerToWorkerMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_workflow_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -531,94 +422,65 @@ func (x *WorkflowStreamRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use WorkflowStreamRequest.ProtoReflect.Descriptor instead.
-func (*WorkflowStreamRequest) Descriptor() ([]byte, []int) {
-	return file_proto_workflow_proto_rawDescGZIP(), []int{8}
+// Deprecated: Use ServerToWorkerMessage.ProtoReflect.Descriptor instead.
+func (*ServerToWorkerMessage) Descriptor() ([]byte, []int) {
+	return file_proto_workflow_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *WorkflowStreamRequest) GetMessageType() isWorkflowStreamRequest_MessageType {
+func (x *ServerToWorkerMessage) GetMessageType() isServerToWorkerMessage_MessageType {
 	if x != nil {
 		return x.MessageType
 	}
 	return nil
 }
 
-func (x *WorkflowStreamRequest) GetExecutionRequest() *WorkflowExecutionRequest {
+func (x *ServerToWorkerMessage) GetExecutionRequest() *WorkflowExecutionRequest {
 	if x != nil {
-		if x, ok := x.MessageType.(*WorkflowStreamRequest_ExecutionRequest); ok {
+		if x, ok := x.MessageType.(*ServerToWorkerMessage_ExecutionRequest); ok {
 			return x.ExecutionRequest
 		}
 	}
 	return nil
 }
 
-func (x *WorkflowStreamRequest) GetStateUpdate() *StateUpdateRequest {
-	if x != nil {
-		if x, ok := x.MessageType.(*WorkflowStreamRequest_StateUpdate); ok {
-			return x.StateUpdate
-		}
-	}
-	return nil
+type isServerToWorkerMessage_MessageType interface {
+	isServerToWorkerMessage_MessageType()
 }
 
-func (x *WorkflowStreamRequest) GetWorkflowComplete() *WorkflowCompleteRequest {
-	if x != nil {
-		if x, ok := x.MessageType.(*WorkflowStreamRequest_WorkflowComplete); ok {
-			return x.WorkflowComplete
-		}
-	}
-	return nil
-}
-
-type isWorkflowStreamRequest_MessageType interface {
-	isWorkflowStreamRequest_MessageType()
-}
-
-type WorkflowStreamRequest_ExecutionRequest struct {
+type ServerToWorkerMessage_ExecutionRequest struct {
 	ExecutionRequest *WorkflowExecutionRequest `protobuf:"bytes,1,opt,name=execution_request,json=executionRequest,proto3,oneof"`
 }
 
-type WorkflowStreamRequest_StateUpdate struct {
-	StateUpdate *StateUpdateRequest `protobuf:"bytes,2,opt,name=state_update,json=stateUpdate,proto3,oneof"`
-}
+func (*ServerToWorkerMessage_ExecutionRequest) isServerToWorkerMessage_MessageType() {}
 
-type WorkflowStreamRequest_WorkflowComplete struct {
-	WorkflowComplete *WorkflowCompleteRequest `protobuf:"bytes,3,opt,name=workflow_complete,json=workflowComplete,proto3,oneof"`
-}
-
-func (*WorkflowStreamRequest_ExecutionRequest) isWorkflowStreamRequest_MessageType() {}
-
-func (*WorkflowStreamRequest_StateUpdate) isWorkflowStreamRequest_MessageType() {}
-
-func (*WorkflowStreamRequest_WorkflowComplete) isWorkflowStreamRequest_MessageType() {}
-
-type WorkflowStreamResponse struct {
+// Worker-to-Server messages (worker sends these to server)
+type WorkerToServerMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to MessageType:
 	//
-	//	*WorkflowStreamResponse_StateResponse
-	//	*WorkflowStreamResponse_ExecutionResponse
-	//	*WorkflowStreamResponse_CompleteResponse
-	MessageType   isWorkflowStreamResponse_MessageType `protobuf_oneof:"message_type"`
+	//	*WorkerToServerMessage_ExecutionResponse
+	//	*WorkerToServerMessage_StateUpdate
+	//	*WorkerToServerMessage_WorkflowComplete
+	MessageType   isWorkerToServerMessage_MessageType `protobuf_oneof:"message_type"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *WorkflowStreamResponse) Reset() {
-	*x = WorkflowStreamResponse{}
-	mi := &file_proto_workflow_proto_msgTypes[9]
+func (x *WorkerToServerMessage) Reset() {
+	*x = WorkerToServerMessage{}
+	mi := &file_proto_workflow_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *WorkflowStreamResponse) String() string {
+func (x *WorkerToServerMessage) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*WorkflowStreamResponse) ProtoMessage() {}
+func (*WorkerToServerMessage) ProtoMessage() {}
 
-func (x *WorkflowStreamResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_workflow_proto_msgTypes[9]
+func (x *WorkerToServerMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_workflow_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -629,85 +491,79 @@ func (x *WorkflowStreamResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use WorkflowStreamResponse.ProtoReflect.Descriptor instead.
-func (*WorkflowStreamResponse) Descriptor() ([]byte, []int) {
-	return file_proto_workflow_proto_rawDescGZIP(), []int{9}
+// Deprecated: Use WorkerToServerMessage.ProtoReflect.Descriptor instead.
+func (*WorkerToServerMessage) Descriptor() ([]byte, []int) {
+	return file_proto_workflow_proto_rawDescGZIP(), []int{7}
 }
 
-func (x *WorkflowStreamResponse) GetMessageType() isWorkflowStreamResponse_MessageType {
+func (x *WorkerToServerMessage) GetMessageType() isWorkerToServerMessage_MessageType {
 	if x != nil {
 		return x.MessageType
 	}
 	return nil
 }
 
-func (x *WorkflowStreamResponse) GetStateResponse() *StateUpdateResponse {
+func (x *WorkerToServerMessage) GetExecutionResponse() *WorkflowExecutionResponse {
 	if x != nil {
-		if x, ok := x.MessageType.(*WorkflowStreamResponse_StateResponse); ok {
-			return x.StateResponse
-		}
-	}
-	return nil
-}
-
-func (x *WorkflowStreamResponse) GetExecutionResponse() *WorkflowExecutionResponse {
-	if x != nil {
-		if x, ok := x.MessageType.(*WorkflowStreamResponse_ExecutionResponse); ok {
+		if x, ok := x.MessageType.(*WorkerToServerMessage_ExecutionResponse); ok {
 			return x.ExecutionResponse
 		}
 	}
 	return nil
 }
 
-func (x *WorkflowStreamResponse) GetCompleteResponse() *WorkflowCompleteResponse {
+func (x *WorkerToServerMessage) GetStateUpdate() *StateUpdateRequest {
 	if x != nil {
-		if x, ok := x.MessageType.(*WorkflowStreamResponse_CompleteResponse); ok {
-			return x.CompleteResponse
+		if x, ok := x.MessageType.(*WorkerToServerMessage_StateUpdate); ok {
+			return x.StateUpdate
 		}
 	}
 	return nil
 }
 
-type isWorkflowStreamResponse_MessageType interface {
-	isWorkflowStreamResponse_MessageType()
+func (x *WorkerToServerMessage) GetWorkflowComplete() *WorkflowCompleteRequest {
+	if x != nil {
+		if x, ok := x.MessageType.(*WorkerToServerMessage_WorkflowComplete); ok {
+			return x.WorkflowComplete
+		}
+	}
+	return nil
 }
 
-type WorkflowStreamResponse_StateResponse struct {
-	StateResponse *StateUpdateResponse `protobuf:"bytes,1,opt,name=state_response,json=stateResponse,proto3,oneof"`
+type isWorkerToServerMessage_MessageType interface {
+	isWorkerToServerMessage_MessageType()
 }
 
-type WorkflowStreamResponse_ExecutionResponse struct {
-	ExecutionResponse *WorkflowExecutionResponse `protobuf:"bytes,2,opt,name=execution_response,json=executionResponse,proto3,oneof"`
+type WorkerToServerMessage_ExecutionResponse struct {
+	ExecutionResponse *WorkflowExecutionResponse `protobuf:"bytes,1,opt,name=execution_response,json=executionResponse,proto3,oneof"`
 }
 
-type WorkflowStreamResponse_CompleteResponse struct {
-	CompleteResponse *WorkflowCompleteResponse `protobuf:"bytes,3,opt,name=complete_response,json=completeResponse,proto3,oneof"`
+type WorkerToServerMessage_StateUpdate struct {
+	StateUpdate *StateUpdateRequest `protobuf:"bytes,2,opt,name=state_update,json=stateUpdate,proto3,oneof"`
 }
 
-func (*WorkflowStreamResponse_StateResponse) isWorkflowStreamResponse_MessageType() {}
+type WorkerToServerMessage_WorkflowComplete struct {
+	WorkflowComplete *WorkflowCompleteRequest `protobuf:"bytes,3,opt,name=workflow_complete,json=workflowComplete,proto3,oneof"`
+}
 
-func (*WorkflowStreamResponse_ExecutionResponse) isWorkflowStreamResponse_MessageType() {}
+func (*WorkerToServerMessage_ExecutionResponse) isWorkerToServerMessage_MessageType() {}
 
-func (*WorkflowStreamResponse_CompleteResponse) isWorkflowStreamResponse_MessageType() {}
+func (*WorkerToServerMessage_StateUpdate) isWorkerToServerMessage_MessageType() {}
+
+func (*WorkerToServerMessage_WorkflowComplete) isWorkerToServerMessage_MessageType() {}
 
 var File_proto_workflow_proto protoreflect.FileDescriptor
 
 const file_proto_workflow_proto_rawDesc = "" +
 	"\n" +
-	"\x14proto/workflow.proto\x12\vworkflow.v1\"I\n" +
-	"\x17RegisterEndpointRequest\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
-	"\bendpoint\x18\x02 \x01(\tR\bendpoint\"o\n" +
-	"\x18RegisterEndpointResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\x12\x1f\n" +
-	"\vendpoint_id\x18\x03 \x01(\x03R\n" +
-	"endpointId\"x\n" +
+	"\x14proto/workflow.proto\x12\vworkflow.v1\"\x99\x01\n" +
 	"\x18WorkflowExecutionRequest\x12#\n" +
 	"\rworkflow_name\x18\x01 \x01(\tR\fworkflowName\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x02 \x01(\tR\trequestId\x12\x18\n" +
-	"\apayload\x18\x03 \x01(\tR\apayload\"p\n" +
+	"\apayload\x18\x03 \x01(\tR\apayload\x12\x1f\n" +
+	"\vworkflow_id\x18\x04 \x01(\x03R\n" +
+	"workflowId\"p\n" +
 	"\x19WorkflowExecutionResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x1f\n" +
@@ -721,34 +577,31 @@ const file_proto_workflow_proto_rawDesc = "" +
 	"\n" +
 	"state_type\x18\x03 \x01(\tR\tstateType\x12\x16\n" +
 	"\x06status\x18\x04 \x01(\tR\x06status\x12\x12\n" +
-	"\x04data\x18\x05 \x01(\tR\x04data\"I\n" +
-	"\x13StateUpdateResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"p\n" +
+	"\x04data\x18\x05 \x01(\tR\x04data\"p\n" +
 	"\x17WorkflowCompleteRequest\x12\x1f\n" +
 	"\vworkflow_id\x18\x01 \x01(\x03R\n" +
 	"workflowId\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x1c\n" +
-	"\tvariables\x18\x03 \x01(\tR\tvariables\"N\n" +
-	"\x18WorkflowCompleteResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"\x98\x02\n" +
-	"\x15WorkflowStreamRequest\x12T\n" +
-	"\x11execution_request\x18\x01 \x01(\v2%.workflow.v1.WorkflowExecutionRequestH\x00R\x10executionRequest\x12D\n" +
+	"\tvariables\x18\x03 \x01(\tR\tvariables\"\x14\n" +
+	"\x12HealthCheckRequest\"\xd2\x01\n" +
+	"\x13HealthCheckResponse\x12\x18\n" +
+	"\ahealthy\x18\x01 \x01(\bR\ahealthy\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12J\n" +
+	"\bmetadata\x18\x03 \x03(\v2..workflow.v1.HealthCheckResponse.MetadataEntryR\bmetadata\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"}\n" +
+	"\x15ServerToWorkerMessage\x12T\n" +
+	"\x11execution_request\x18\x01 \x01(\v2%.workflow.v1.WorkflowExecutionRequestH\x00R\x10executionRequestB\x0e\n" +
+	"\fmessage_type\"\x9b\x02\n" +
+	"\x15WorkerToServerMessage\x12W\n" +
+	"\x12execution_response\x18\x01 \x01(\v2&.workflow.v1.WorkflowExecutionResponseH\x00R\x11executionResponse\x12D\n" +
 	"\fstate_update\x18\x02 \x01(\v2\x1f.workflow.v1.StateUpdateRequestH\x00R\vstateUpdate\x12S\n" +
 	"\x11workflow_complete\x18\x03 \x01(\v2$.workflow.v1.WorkflowCompleteRequestH\x00R\x10workflowCompleteB\x0e\n" +
-	"\fmessage_type\"\xa2\x02\n" +
-	"\x16WorkflowStreamResponse\x12I\n" +
-	"\x0estate_response\x18\x01 \x01(\v2 .workflow.v1.StateUpdateResponseH\x00R\rstateResponse\x12W\n" +
-	"\x12execution_response\x18\x02 \x01(\v2&.workflow.v1.WorkflowExecutionResponseH\x00R\x11executionResponse\x12T\n" +
-	"\x11complete_response\x18\x03 \x01(\v2%.workflow.v1.WorkflowCompleteResponseH\x00R\x10completeResponseB\x0e\n" +
-	"\fmessage_type2\xd1\x01\n" +
-	"\x0fWorkflowService\x12_\n" +
-	"\x10RegisterEndpoint\x12$.workflow.v1.RegisterEndpointRequest\x1a%.workflow.v1.RegisterEndpointResponse\x12]\n" +
-	"\x0eWorkflowStream\x12\".workflow.v1.WorkflowStreamRequest\x1a#.workflow.v1.WorkflowStreamResponse(\x010\x012\xcf\x01\n" +
-	"\rWorkerService\x12^\n" +
-	"\rStartWorkflow\x12%.workflow.v1.WorkflowExecutionRequest\x1a&.workflow.v1.WorkflowExecutionResponse\x12^\n" +
-	"\x0fExecuteWorkflow\x12#.workflow.v1.WorkflowStreamResponse\x1a\".workflow.v1.WorkflowStreamRequest(\x010\x01B\tZ\a./protob\x06proto3"
+	"\fmessage_type2\xbf\x01\n" +
+	"\rWorkerService\x12P\n" +
+	"\vHealthCheck\x12\x1f.workflow.v1.HealthCheckRequest\x1a .workflow.v1.HealthCheckResponse\x12\\\n" +
+	"\x0eWorkflowStream\x12\".workflow.v1.ServerToWorkerMessage\x1a\".workflow.v1.WorkerToServerMessage(\x010\x01B\tZ\a./protob\x06proto3"
 
 var (
 	file_proto_workflow_proto_rawDescOnce sync.Once
@@ -762,39 +615,33 @@ func file_proto_workflow_proto_rawDescGZIP() []byte {
 	return file_proto_workflow_proto_rawDescData
 }
 
-var file_proto_workflow_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_proto_workflow_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_proto_workflow_proto_goTypes = []any{
-	(*RegisterEndpointRequest)(nil),   // 0: workflow.v1.RegisterEndpointRequest
-	(*RegisterEndpointResponse)(nil),  // 1: workflow.v1.RegisterEndpointResponse
-	(*WorkflowExecutionRequest)(nil),  // 2: workflow.v1.WorkflowExecutionRequest
-	(*WorkflowExecutionResponse)(nil), // 3: workflow.v1.WorkflowExecutionResponse
-	(*StateUpdateRequest)(nil),        // 4: workflow.v1.StateUpdateRequest
-	(*StateUpdateResponse)(nil),       // 5: workflow.v1.StateUpdateResponse
-	(*WorkflowCompleteRequest)(nil),   // 6: workflow.v1.WorkflowCompleteRequest
-	(*WorkflowCompleteResponse)(nil),  // 7: workflow.v1.WorkflowCompleteResponse
-	(*WorkflowStreamRequest)(nil),     // 8: workflow.v1.WorkflowStreamRequest
-	(*WorkflowStreamResponse)(nil),    // 9: workflow.v1.WorkflowStreamResponse
+	(*WorkflowExecutionRequest)(nil),  // 0: workflow.v1.WorkflowExecutionRequest
+	(*WorkflowExecutionResponse)(nil), // 1: workflow.v1.WorkflowExecutionResponse
+	(*StateUpdateRequest)(nil),        // 2: workflow.v1.StateUpdateRequest
+	(*WorkflowCompleteRequest)(nil),   // 3: workflow.v1.WorkflowCompleteRequest
+	(*HealthCheckRequest)(nil),        // 4: workflow.v1.HealthCheckRequest
+	(*HealthCheckResponse)(nil),       // 5: workflow.v1.HealthCheckResponse
+	(*ServerToWorkerMessage)(nil),     // 6: workflow.v1.ServerToWorkerMessage
+	(*WorkerToServerMessage)(nil),     // 7: workflow.v1.WorkerToServerMessage
+	nil,                               // 8: workflow.v1.HealthCheckResponse.MetadataEntry
 }
 var file_proto_workflow_proto_depIdxs = []int32{
-	2,  // 0: workflow.v1.WorkflowStreamRequest.execution_request:type_name -> workflow.v1.WorkflowExecutionRequest
-	4,  // 1: workflow.v1.WorkflowStreamRequest.state_update:type_name -> workflow.v1.StateUpdateRequest
-	6,  // 2: workflow.v1.WorkflowStreamRequest.workflow_complete:type_name -> workflow.v1.WorkflowCompleteRequest
-	5,  // 3: workflow.v1.WorkflowStreamResponse.state_response:type_name -> workflow.v1.StateUpdateResponse
-	3,  // 4: workflow.v1.WorkflowStreamResponse.execution_response:type_name -> workflow.v1.WorkflowExecutionResponse
-	7,  // 5: workflow.v1.WorkflowStreamResponse.complete_response:type_name -> workflow.v1.WorkflowCompleteResponse
-	0,  // 6: workflow.v1.WorkflowService.RegisterEndpoint:input_type -> workflow.v1.RegisterEndpointRequest
-	8,  // 7: workflow.v1.WorkflowService.WorkflowStream:input_type -> workflow.v1.WorkflowStreamRequest
-	2,  // 8: workflow.v1.WorkerService.StartWorkflow:input_type -> workflow.v1.WorkflowExecutionRequest
-	9,  // 9: workflow.v1.WorkerService.ExecuteWorkflow:input_type -> workflow.v1.WorkflowStreamResponse
-	1,  // 10: workflow.v1.WorkflowService.RegisterEndpoint:output_type -> workflow.v1.RegisterEndpointResponse
-	9,  // 11: workflow.v1.WorkflowService.WorkflowStream:output_type -> workflow.v1.WorkflowStreamResponse
-	3,  // 12: workflow.v1.WorkerService.StartWorkflow:output_type -> workflow.v1.WorkflowExecutionResponse
-	8,  // 13: workflow.v1.WorkerService.ExecuteWorkflow:output_type -> workflow.v1.WorkflowStreamRequest
-	10, // [10:14] is the sub-list for method output_type
-	6,  // [6:10] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	8, // 0: workflow.v1.HealthCheckResponse.metadata:type_name -> workflow.v1.HealthCheckResponse.MetadataEntry
+	0, // 1: workflow.v1.ServerToWorkerMessage.execution_request:type_name -> workflow.v1.WorkflowExecutionRequest
+	1, // 2: workflow.v1.WorkerToServerMessage.execution_response:type_name -> workflow.v1.WorkflowExecutionResponse
+	2, // 3: workflow.v1.WorkerToServerMessage.state_update:type_name -> workflow.v1.StateUpdateRequest
+	3, // 4: workflow.v1.WorkerToServerMessage.workflow_complete:type_name -> workflow.v1.WorkflowCompleteRequest
+	4, // 5: workflow.v1.WorkerService.HealthCheck:input_type -> workflow.v1.HealthCheckRequest
+	6, // 6: workflow.v1.WorkerService.WorkflowStream:input_type -> workflow.v1.ServerToWorkerMessage
+	5, // 7: workflow.v1.WorkerService.HealthCheck:output_type -> workflow.v1.HealthCheckResponse
+	7, // 8: workflow.v1.WorkerService.WorkflowStream:output_type -> workflow.v1.WorkerToServerMessage
+	7, // [7:9] is the sub-list for method output_type
+	5, // [5:7] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_proto_workflow_proto_init() }
@@ -802,15 +649,13 @@ func file_proto_workflow_proto_init() {
 	if File_proto_workflow_proto != nil {
 		return
 	}
-	file_proto_workflow_proto_msgTypes[8].OneofWrappers = []any{
-		(*WorkflowStreamRequest_ExecutionRequest)(nil),
-		(*WorkflowStreamRequest_StateUpdate)(nil),
-		(*WorkflowStreamRequest_WorkflowComplete)(nil),
+	file_proto_workflow_proto_msgTypes[6].OneofWrappers = []any{
+		(*ServerToWorkerMessage_ExecutionRequest)(nil),
 	}
-	file_proto_workflow_proto_msgTypes[9].OneofWrappers = []any{
-		(*WorkflowStreamResponse_StateResponse)(nil),
-		(*WorkflowStreamResponse_ExecutionResponse)(nil),
-		(*WorkflowStreamResponse_CompleteResponse)(nil),
+	file_proto_workflow_proto_msgTypes[7].OneofWrappers = []any{
+		(*WorkerToServerMessage_ExecutionResponse)(nil),
+		(*WorkerToServerMessage_StateUpdate)(nil),
+		(*WorkerToServerMessage_WorkflowComplete)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -818,9 +663,9 @@ func file_proto_workflow_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_workflow_proto_rawDesc), len(file_proto_workflow_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   10,
+			NumMessages:   9,
 			NumExtensions: 0,
-			NumServices:   2,
+			NumServices:   1,
 		},
 		GoTypes:           file_proto_workflow_proto_goTypes,
 		DependencyIndexes: file_proto_workflow_proto_depIdxs,

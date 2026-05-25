@@ -13,5 +13,13 @@ database:
   dbname: "workflow_engine"
   sslmode: "disable"
 
+redis:
+  host: "localhost"
+  port: 6379
+  password: ""
+  db: 0
+  worker_registry_key: "workflow:workers"
+  worker_events_channel: "workflow:worker_events"
+
 logging:
   level: "info"

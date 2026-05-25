@@ -1,50 +1,99 @@
 package database
 
 import (
-	"database/sql"
+	"context"
 	"fmt"
 	"time"
 
 	"workflow-engine/internal/models"
 
-	_ "github.com/lib/pq"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type DB struct {
-	*sql.DB
+	pool *pgxpool.Pool
 }
 
-// NewDB creates a new database connection
+// NewDB creates a new database connection pool
 func NewDB(host, port, user, password, dbname string) (*DB, error) {
-	psqlInfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		host, port, user, password, dbname)
+	// Build connection string with production-ready pool configuration
+	connString := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable&pool_max_conns=30&pool_min_conns=10&pool_max_conn_lifetime=1h&pool_max_conn_idle_time=30m&pool_health_check_period=1m",
+		user, password, host, port, dbname)
 
-	db, err := sql.Open("postgres", psqlInfo)
+	config, err := pgxpool.ParseConfig(connString)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse config: %v", err)
 	}
 
-	if err = db.Ping(); err != nil {
-		return nil, err
+	// Configure pool settings for high throughput production workload
+	config.MaxConns = 30                      // High concurrency support
+	config.MinConns = 10                      // Keep connections warm
+	config.MaxConnLifetime = time.Hour        // Rotate connections hourly
+	config.MaxConnIdleTime = time.Minute * 30 // Close idle connections
+	config.HealthCheckPeriod = time.Minute    // Regular health checks
+
+	// Production connection timeout
+	config.ConnConfig.Config.ConnectTimeout = time.Second * 5
+
+	pool, err := pgxpool.NewWithConfig(context.Background(), config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create connection pool: %v", err)
 	}
 
-	return &DB{db}, nil
+	// Test connection
+	if err = pool.Ping(context.Background()); err != nil {
+		return nil, fmt.Errorf("failed to ping database: %v", err)
+	}
+
+	return &DB{pool: pool}, nil
 }
 
-// NewDBFromDSN creates a new database connection from DSN string
+// NewDBFromDSN creates a new database connection pool from DSN string
 func NewDBFromDSN(dsn string) (*DB, error) {
-	db, err := sql.Open("postgres", dsn)
+	config, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse config: %v", err)
 	}
 
-	if err = db.Ping(); err != nil {
-		return nil, err
+	// Configure pool settings for high throughput production workload
+	config.MaxConns = 30                      // High concurrency support
+	config.MinConns = 10                      // Keep connections warm
+	config.MaxConnLifetime = time.Hour        // Rotate connections hourly
+	config.MaxConnIdleTime = time.Minute * 30 // Close idle connections
+	config.HealthCheckPeriod = time.Minute    // Regular health checks
+
+	// Production connection timeout
+	config.ConnConfig.Config.ConnectTimeout = time.Second * 5
+
+	pool, err := pgxpool.NewWithConfig(context.Background(), config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create connection pool: %v", err)
 	}
 
-	return &DB{db}, nil
+	return &DB{pool: pool}, nil
+}
 
-	return &DB{db}, nil
+// Close closes the database connection pool
+func (db *DB) Close() {
+	db.pool.Close()
+}
+
+// GetPoolStats returns connection pool statistics for monitoring
+func (db *DB) GetPoolStats() map[string]interface{} {
+	stat := db.pool.Stat()
+	return map[string]interface{}{
+		"total_connections":          stat.TotalConns(),
+		"idle_connections":           stat.IdleConns(),
+		"acquired_connections":       stat.AcquiredConns(),
+		"constructing_connections":   stat.ConstructingConns(),
+		"max_connections":            stat.MaxConns(),
+		"acquire_count":              stat.AcquireCount(),
+		"acquire_duration":           stat.AcquireDuration().String(),
+		"canceled_acquire_count":     stat.CanceledAcquireCount(),
+		"empty_acquire_count":        stat.EmptyAcquireCount(),
+		"max_lifetime_destroy_count": stat.MaxLifetimeDestroyCount(),
+		"max_idle_destroy_count":     stat.MaxIdleDestroyCount(),
+	}
 }
 
 // CreateEndpoint creates a new endpoint in the database
@@ -57,7 +106,7 @@ func (db *DB) CreateEndpoint(name, endpoint string) (*models.Endpoint, error) {
 	now := time.Now()
 	var ep models.Endpoint
 
-	err := db.QueryRow(query, name, endpoint, now, now).Scan(
+	err := db.pool.QueryRow(context.Background(), query, name, endpoint, now, now).Scan(
 		&ep.ID, &ep.Name, &ep.Endpoint, &ep.Version, &ep.CreatedAt, &ep.UpdatedAt)
 
 	if err != nil {
@@ -73,7 +122,7 @@ func (db *DB) GetEndpointByName(name string) (*models.Endpoint, error) {
 			  FROM waves.endpoint WHERE name = $1`
 
 	var ep models.Endpoint
-	err := db.QueryRow(query, name).Scan(
+	err := db.pool.QueryRow(context.Background(), query, name).Scan(
 		&ep.ID, &ep.Name, &ep.Endpoint, &ep.Version, &ep.CreatedAt, &ep.UpdatedAt)
 
 	if err != nil {
@@ -93,7 +142,7 @@ func (db *DB) CreateWorkflow(name, rid, workflowType string) (*models.Workflow, 
 	now := time.Now()
 	var wf models.Workflow
 
-	err := db.QueryRow(query, name, rid, workflowType, models.WorkflowStatusPending, now, now).Scan(
+	err := db.pool.QueryRow(context.Background(), query, name, rid, workflowType, models.WorkflowStatusPending, now, now).Scan(
 		&wf.ID, &wf.Name, &wf.RID, &wf.Type, &wf.Status, &wf.Version, &wf.CreatedAt, &wf.UpdatedAt)
 
 	if err != nil {
@@ -106,7 +155,8 @@ func (db *DB) CreateWorkflow(name, rid, workflowType string) (*models.Workflow, 
 // UpdateWorkflowStatus updates the workflow status
 func (db *DB) UpdateWorkflowStatus(id int64, status string) error {
 	query := `UPDATE waves.workflow SET status = $1, updated_at = $2 WHERE id = $3`
-	_, err := db.Exec(query, status, time.Now(), id)
+
+	_, err := db.pool.Exec(context.Background(), query, status, time.Now(), id)
 	return err
 }
 
@@ -120,9 +170,8 @@ func (db *DB) CreateState(workflowID int64, name, stateType, status string) (*mo
 	now := time.Now()
 	var state models.State
 
-	err := db.QueryRow(query, workflowID, name, stateType, status, now, now).Scan(
-		&state.ID, &state.WorkflowID, &state.Name, &state.Type, &state.Status,
-		&state.Version, &state.CreatedAt, &state.UpdatedAt)
+	err := db.pool.QueryRow(context.Background(), query, workflowID, name, stateType, status, now, now).Scan(
+		&state.ID, &state.WorkflowID, &state.Name, &state.Type, &state.Status, &state.Version, &state.CreatedAt, &state.UpdatedAt)
 
 	if err != nil {
 		return nil, err
@@ -132,10 +181,11 @@ func (db *DB) CreateState(workflowID int64, name, stateType, status string) (*mo
 }
 
 // UpdateStateStatus updates the state status
+// UpdateStateStatus updates the status of a state
 func (db *DB) UpdateStateStatus(workflowID int64, name, status string) error {
-	query := `UPDATE waves.state SET status = $1, updated_at = $2 
-			  WHERE workflow_id = $3 AND name = $4`
-	_, err := db.Exec(query, status, time.Now(), workflowID, name)
+	query := `UPDATE waves.state SET status = $1, updated_at = $2 WHERE workflow_id = $3 AND name = $4`
+
+	_, err := db.pool.Exec(context.Background(), query, status, time.Now(), workflowID, name)
 	return err
 }
 
@@ -144,7 +194,8 @@ func (db *DB) CreateOrUpdateVariables(workflowID int64, lastTaskName string, dat
 	// Check if variables exist for this workflow
 	var count int
 	checkQuery := `SELECT COUNT(*) FROM waves.variables WHERE workflow_id = $1`
-	err := db.QueryRow(checkQuery, workflowID).Scan(&count)
+
+	err := db.pool.QueryRow(context.Background(), checkQuery, workflowID).Scan(&count)
 	if err != nil {
 		return err
 	}
@@ -155,12 +206,12 @@ func (db *DB) CreateOrUpdateVariables(workflowID int64, lastTaskName string, dat
 		// Update existing variables
 		updateQuery := `UPDATE waves.variables SET last_task_name = $1, data = $2, updated_at = $3 
 						WHERE workflow_id = $4`
-		_, err = db.Exec(updateQuery, lastTaskName, data, now, workflowID)
+		_, err = db.pool.Exec(context.Background(), updateQuery, lastTaskName, data, now, workflowID)
 	} else {
 		// Create new variables
 		insertQuery := `INSERT INTO waves.variables (workflow_id, last_task_name, data, created_at, updated_at)
 						VALUES ($1, $2, $3, $4, $5)`
-		_, err = db.Exec(insertQuery, workflowID, lastTaskName, data, now, now)
+		_, err = db.pool.Exec(context.Background(), insertQuery, workflowID, lastTaskName, data, now, now)
 	}
 
 	return err
@@ -172,7 +223,7 @@ func (db *DB) GetWorkflowByID(id int64) (*models.Workflow, error) {
 			  FROM waves.workflow WHERE id = $1`
 
 	var wf models.Workflow
-	err := db.QueryRow(query, id).Scan(
+	err := db.pool.QueryRow(context.Background(), query, id).Scan(
 		&wf.ID, &wf.Name, &wf.RID, &wf.Type, &wf.Status, &wf.Version, &wf.CreatedAt, &wf.UpdatedAt)
 
 	if err != nil {

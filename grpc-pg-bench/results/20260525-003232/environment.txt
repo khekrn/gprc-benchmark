@@ -1,0 +1,36 @@
+timestamp: 20260525-003232
+stacks: go-pgx kotlin-vertx
+concurrency_levels: 1 32 128
+warmup: 3s  duration: 10s  payload: 256B  client_conns: 4
+pg_pool: min=4 max=16
+server_cpus: 0,1  client_cpus: 0,1
+gomaxprocs: 2  vertx_event_loops: 2  jvm_opts: -Xms512m -Xmx1024m -XX:+UseZGC -XX:+AlwaysPreTouch
+--- uname ---
+Darwin KishoreKarunakarans-MacBook-Pro.local 24.6.0 Darwin Kernel Version 24.6.0: Mon Jul 14 11:30:29 PDT 2025; root:xnu-11417.140.69~1/RELEASE_ARM64_T6000 arm64
+--- cpu ---
+Total CPU(s):            10
+Model name:              MacBookPro18,1
+--- mem ---
+Mach Virtual Memory Statistics: (page size of 16384 bytes)
+Pages free:                               54523.
+Pages active:                            356588.
+Pages inactive:                          338916.
+Pages speculative:                        16713.
+Pages throttled:                              0.
+Pages wired down:                        129000.
+Pages purgeable:                           3262.
+"Translation faults":                 437323173.
+Pages copy-on-write:                   13026164.
+Pages zero filled:                    236152062.
+Pages reactivated:                      7113769.
+Pages purged:                           1833374.
+File-backed pages:                       257760.
+Anonymous pages:                         454457.
+Pages stored in compressor:              335873.
+Pages occupied by compressor:            111672.
+Decompressions:                         2097622.
+Compressions:                           4242624.
+Pageins:                                4550265.
+Pageouts:                                 78608.
+Swapins:                                      0.
+Swapouts:                                     0.

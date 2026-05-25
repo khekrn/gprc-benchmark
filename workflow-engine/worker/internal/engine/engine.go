@@ -1,3 +1,6 @@
+// Package engine provides workflow execution capabilities for the worker.
+// It handles workflow definition, registration, and execution with support
+// for state updates and completion callbacks.
 package engine
 
 import (
@@ -7,29 +10,39 @@ import (
 	"workflow-worker/internal/models"
 )
 
+// StateUpdateCallback is a function type for sending state updates
+type StateUpdateCallback func(workflowID int64, stateName, stateType, status string, data map[string]interface{}) error
+
+// WorkflowCompleteCallback is a function type for sending workflow completion notifications
+type WorkflowCompleteCallback func(workflowID int64, status string, variables map[string]interface{}) error
+
 // WorkflowEngine handles workflow execution
 type WorkflowEngine struct {
-	workflows map[string]*models.WorkflowDefinition
-	client    WorkflowClient
-}
-
-// WorkflowClient interface for communicating with the workflow server
-type WorkflowClient interface {
-	SendStateUpdate(workflowID int64, stateName, stateType, status string, data map[string]interface{}) error
-	SendWorkflowComplete(workflowID int64, status string, variables map[string]interface{}) error
+	workflows                map[string]*models.WorkflowDefinition
+	stateUpdateCallback      StateUpdateCallback
+	workflowCompleteCallback WorkflowCompleteCallback
 }
 
 // NewWorkflowEngine creates a new workflow engine
-func NewWorkflowEngine(client WorkflowClient) *WorkflowEngine {
+func NewWorkflowEngine() *WorkflowEngine {
 	engine := &WorkflowEngine{
 		workflows: make(map[string]*models.WorkflowDefinition),
-		client:    client,
 	}
 
 	// Register the loan approval workflow
 	engine.RegisterLoanApprovalWorkflow()
 
 	return engine
+}
+
+// SetStateUpdateCallback sets the callback for sending state updates
+func (e *WorkflowEngine) SetStateUpdateCallback(callback StateUpdateCallback) {
+	e.stateUpdateCallback = callback
+}
+
+// SetWorkflowCompleteCallback sets the callback for sending workflow completion notifications
+func (e *WorkflowEngine) SetWorkflowCompleteCallback(callback WorkflowCompleteCallback) {
+	e.workflowCompleteCallback = callback
 }
 
 // RegisterWorkflow registers a workflow definition
@@ -71,9 +84,11 @@ func (e *WorkflowEngine) executeWorkflowSteps(workflow *models.WorkflowDefinitio
 		log.Printf("Executing step: %s (%s)", step.Name, step.Type)
 
 		// Send pending state update
-		err := e.client.SendStateUpdate(ctx.WorkflowID, step.Name, step.Type, models.StatusPending, ctx.Variables)
-		if err != nil {
-			log.Printf("Error sending pending state update: %v", err)
+		if e.stateUpdateCallback != nil {
+			err := e.stateUpdateCallback(ctx.WorkflowID, step.Name, step.Type, models.StatusPending, ctx.Variables)
+			if err != nil {
+				log.Printf("Error sending pending state update: %v", err)
+			}
 		}
 
 		// Execute the step
@@ -82,17 +97,23 @@ func (e *WorkflowEngine) executeWorkflowSteps(workflow *models.WorkflowDefinitio
 			log.Printf("Error executing step %s: %v", step.Name, err)
 
 			// Send failed state update
-			e.client.SendStateUpdate(ctx.WorkflowID, step.Name, step.Type, models.StatusFailed, ctx.Variables)
+			if e.stateUpdateCallback != nil {
+				e.stateUpdateCallback(ctx.WorkflowID, step.Name, step.Type, models.StatusFailed, ctx.Variables)
+			}
 
 			// Complete workflow with failure
-			e.client.SendWorkflowComplete(ctx.WorkflowID, models.StatusFailed, ctx.Variables)
+			if e.workflowCompleteCallback != nil {
+				e.workflowCompleteCallback(ctx.WorkflowID, models.StatusFailed, ctx.Variables)
+			}
 			return err
 		}
 
 		// Send success state update
-		err = e.client.SendStateUpdate(ctx.WorkflowID, step.Name, step.Type, models.StatusSuccess, ctx.Variables)
-		if err != nil {
-			log.Printf("Error sending success state update: %v", err)
+		if e.stateUpdateCallback != nil {
+			err = e.stateUpdateCallback(ctx.WorkflowID, step.Name, step.Type, models.StatusSuccess, ctx.Variables)
+			if err != nil {
+				log.Printf("Error sending success state update: %v", err)
+			}
 		}
 
 		// Determine next step
@@ -104,7 +125,10 @@ func (e *WorkflowEngine) executeWorkflowSteps(workflow *models.WorkflowDefinitio
 
 	// Workflow completed successfully
 	log.Printf("Workflow %s completed successfully", ctx.WorkflowName)
-	return e.client.SendWorkflowComplete(ctx.WorkflowID, models.StatusSuccess, ctx.Variables)
+	if e.workflowCompleteCallback != nil {
+		return e.workflowCompleteCallback(ctx.WorkflowID, models.StatusSuccess, ctx.Variables)
+	}
+	return nil
 }
 
 // getNextStep determines the next step based on current step and execution result

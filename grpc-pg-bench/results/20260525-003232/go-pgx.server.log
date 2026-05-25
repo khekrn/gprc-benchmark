@@ -1,0 +1,2 @@
+time=2026-05-25T00:33:01.281+05:30 level=ERROR msg="server exited with error" err="listen 127.0.0.1:50051: listen tcp 127.0.0.1:50051time=2026-05-25T00:40:07.810+05:30 level=INFO msg="shutdown signal received, draining in-flight RPCs"
+time=2026-05-25T00:40:07.810+05:30 level=INFO msg="graceful stop complete"

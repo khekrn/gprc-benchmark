@@ -1,0 +1,252 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.beam.bench</groupId>
+  <artifactId>kotlin-vertx-bench</artifactId>
+  <version>1.0.0</version>
+  <packaging>jar</packaging>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <!-- Java 25 baseline. Kotlin/Vert.x/coroutines artifacts target <=21 bytecode
+         and run unchanged on 25; we only ask javac to emit class files for 25. -->
+    <maven.compiler.release>25</maven.compiler.release>
+
+    <!-- Kotlin 2.2.x is the first line whose bundled IntelliJ libs parse the
+         Java 25 version string. Anything older fails with IAE: "25.0.1". -->
+    <kotlin.version>2.2.21</kotlin.version>
+    <!-- Bytecode target. 21 is the highest stable LTS; Kotlin 2.2 also accepts
+         24, but emitting 21 lets the jar run on any JDK >= 21. -->
+    <kotlin.jvm.target>21</kotlin.jvm.target>
+    <kotlinx.coroutines.version>1.10.1</kotlinx.coroutines.version>
+    <vertx.version>5.0.5</vertx.version>
+    <grpc.version>1.71.0</grpc.version>
+    <protobuf.version>4.29.3</protobuf.version>
+    <slf4j.version>2.0.16</slf4j.version>
+    <logback.version>1.5.12</logback.version>
+
+    <main.class>com.beam.bench.MainKt</main.class>
+  </properties>
+
+  <dependencies>
+    <!-- Kotlin stdlib + coroutines -->
+    <dependency>
+      <groupId>org.jetbrains.kotlin</groupId>
+      <artifactId>kotlin-stdlib</artifactId>
+      <version>${kotlin.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.jetbrains.kotlinx</groupId>
+      <artifactId>kotlinx-coroutines-core</artifactId>
+      <version>${kotlinx.coroutines.version}</version>
+    </dependency>
+
+    <!-- Vert.x core + Kotlin coroutine bridge -->
+    <dependency>
+      <groupId>io.vertx</groupId>
+      <artifactId>vertx-core</artifactId>
+      <version>${vertx.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.vertx</groupId>
+      <artifactId>vertx-lang-kotlin-coroutines</artifactId>
+      <version>${vertx.version}</version>
+    </dependency>
+
+    <!-- Vert.x reactive Postgres client (async driver under test).
+         scram-client (SASL auth) comes in transitively at the version
+         vertx-pg-client was tested against; pinning it ourselves is fragile. -->
+    <dependency>
+      <groupId>io.vertx</groupId>
+      <artifactId>vertx-pg-client</artifactId>
+      <version>${vertx.version}</version>
+    </dependency>
+
+    <!-- Vert.x gRPC server (Netty-based, integrates with the event loop) -->
+    <dependency>
+      <groupId>io.vertx</groupId>
+      <artifactId>vertx-grpc-server</artifactId>
+      <version>${vertx.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.vertx</groupId>
+      <artifactId>vertx-grpc-protoc-plugin2</artifactId>
+      <version>${vertx.version}</version>
+    </dependency>
+
+    <!-- protobuf runtime + grpc stubs needed by generated code -->
+    <dependency>
+      <groupId>com.google.protobuf</groupId>
+      <artifactId>protobuf-java</artifactId>
+      <version>${protobuf.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.grpc</groupId>
+      <artifactId>grpc-protobuf</artifactId>
+      <version>${grpc.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.grpc</groupId>
+      <artifactId>grpc-stub</artifactId>
+      <version>${grpc.version}</version>
+    </dependency>
+    <!-- javax.annotation.Generated used by generated grpc code on JDK 11+ -->
+    <dependency>
+      <groupId>org.apache.tomcat</groupId>
+      <artifactId>annotations-api</artifactId>
+      <version>6.0.53</version>
+      <scope>provided</scope>
+    </dependency>
+
+    <!-- Logging: SLF4J API + Logback impl. Vert.x picks up SLF4J automatically
+         when slf4j-api is on the classpath (no system property needed). -->
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+      <version>${slf4j.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>ch.qos.logback</groupId>
+      <artifactId>logback-classic</artifactId>
+      <version>${logback.version}</version>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <sourceDirectory>src/main/kotlin</sourceDirectory>
+
+    <extensions>
+      <!-- Resolves the protoc + plugin binaries for the current OS/arch -->
+      <extension>
+        <groupId>kr.motd.maven</groupId>
+        <artifactId>os-maven-plugin</artifactId>
+        <version>1.7.1</version>
+      </extension>
+    </extensions>
+
+    <plugins>
+      <!-- 1. Generate Java protobuf + Vert.x gRPC stubs from the shared proto -->
+      <plugin>
+        <groupId>org.xolstice.maven.plugins</groupId>
+        <artifactId>protobuf-maven-plugin</artifactId>
+        <version>0.6.1</version>
+        <configuration>
+          <protocArtifact>com.google.protobuf:protoc:${protobuf.version}:exe:${os.detected.classifier}</protocArtifact>
+          <protoSourceRoot>${project.basedir}/src/main/proto</protoSourceRoot>
+          <!-- Vert.x gRPC code generator -->
+          <protocPlugins>
+            <protocPlugin>
+              <id>vertx-grpc</id>
+              <groupId>io.vertx</groupId>
+              <artifactId>vertx-grpc-protoc-plugin2</artifactId>
+              <version>${vertx.version}</version>
+              <mainClass>io.vertx.grpc.plugin.VertxGrpcGenerator</mainClass>
+              <!-- Generate only the server service base class (no client),
+                   with no "Vertx" prefix so the class is CommandServiceService. -->
+              <args>
+                <arg>--grpc-client=false</arg>
+                <arg>--grpc-service=true</arg>
+                <arg>--vertx-codegen=false</arg>
+              </args>
+            </protocPlugin>
+          </protocPlugins>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <!-- `compile` reads <protocPlugins> and runs each one alongside
+                   protoc's built-in Java generator. `compile-custom` is for the
+                   older single-plugin (<pluginId>) style and would fail here. -->
+              <goal>compile</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- 2. Compile Kotlin (and let it see the generated Java sources).
+           Kotlin emits bytecode at jvm.target (21 is the highest supported
+           by kotlinc 2.1) — that runs unchanged on the Java 25 runtime. -->
+      <plugin>
+        <groupId>org.jetbrains.kotlin</groupId>
+        <artifactId>kotlin-maven-plugin</artifactId>
+        <version>${kotlin.version}</version>
+        <configuration>
+          <jvmTarget>${kotlin.jvm.target}</jvmTarget>
+        </configuration>
+        <executions>
+          <execution>
+            <id>compile</id>
+            <phase>process-sources</phase>
+            <goals>
+              <goal>compile</goal>
+            </goals>
+            <configuration>
+              <sourceDirs>
+                <sourceDir>${project.basedir}/src/main/kotlin</sourceDir>
+                <sourceDir>${project.build.directory}/generated-sources/protobuf/java</sourceDir>
+                <sourceDir>${project.build.directory}/generated-sources/protobuf/grpc-java</sourceDir>
+              </sourceDirs>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- 3. Compile the generated Java protobuf sources -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+        <executions>
+          <execution>
+            <id>java-compile</id>
+            <phase>process-sources</phase>
+            <goals>
+              <goal>compile</goal>
+            </goals>
+          </execution>
+        </executions>
+        <!-- Inherits release=25 from maven.compiler.release property. -->
+      </plugin>
+
+      <!-- 4. Build a runnable fat jar -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>3.6.0</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <transformers>
+                <transformer
+                  implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                  <manifestEntries>
+                    <Main-Class>${main.class}</Main-Class>
+                  </manifestEntries>
+                </transformer>
+                <transformer
+                  implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+              </transformers>
+              <filters>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                  </excludes>
+                </filter>
+              </filters>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

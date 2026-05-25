@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Logback config tuned for benchmark runs:
+  - INFO root so we get startup/shutdown lines but no per-request noise.
+  - AsyncAppender so the (rare) log call never blocks an event loop.
+  - Vert.x + Netty downgraded to WARN to avoid chatty handshake logs.
+-->
+<configuration>
+  <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <appender name="ASYNC" class="ch.qos.logback.classic.AsyncAppender">
+    <appender-ref ref="CONSOLE"/>
+    <queueSize>1024</queueSize>
+    <discardingThreshold>0</discardingThreshold>
+    <neverBlock>true</neverBlock>
+  </appender>
+
+  <logger name="io.vertx" level="WARN"/>
+  <logger name="io.netty" level="WARN"/>
+
+  <root level="INFO">
+    <appender-ref ref="ASYNC"/>
+  </root>
+</configuration>

@@ -3,8 +3,16 @@ worker:
   endpoint: "localhost:9191"
   port: "9191"
 
+redis:
+  host: "localhost"
+  port: 6379
+  password: ""
+  db: 0
+  worker_registry_key: "workflow:workers"
+  worker_events_channel: "workflow:worker_events"
+
 servers:
-  # List of server endpoints for load balancing
+  # List of server endpoints for load balancing (deprecated - using Redis discovery now)
   endpoints:
     - address: "localhost:9090"
       name: "workflow-engine-1"

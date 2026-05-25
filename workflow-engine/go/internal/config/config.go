@@ -13,6 +13,7 @@ import (
 type Config struct {
 	Server   ServerConfig   `yaml:"server"`
 	Database DatabaseConfig `yaml:"database"`
+	Redis    RedisConfig    `yaml:"redis"`
 	Logging  LoggingConfig  `yaml:"logging"`
 }
 
@@ -46,6 +47,16 @@ type DatabaseConfig struct {
 // LoggingConfig holds logging configuration
 type LoggingConfig struct {
 	Level string `yaml:"level"`
+}
+
+// RedisConfig holds Redis configuration
+type RedisConfig struct {
+	Host                string `yaml:"host"`
+	Port                int    `yaml:"port"`
+	Password            string `yaml:"password"`
+	DB                  int    `yaml:"db"`
+	WorkerRegistryKey   string `yaml:"worker_registry_key"`
+	WorkerEventsChannel string `yaml:"worker_events_channel"`
 }
 
 // LoadConfig loads configuration from file with environment variable overrides

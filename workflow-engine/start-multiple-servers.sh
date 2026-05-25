@@ -1,60 +1,48 @@
 #!/bin/bash
 
-# Start multiple workflow engine server instances
+# Script to start multiple workflow servers
 
-echo "Starting Workflow Engine Server Instances..."
+echo "Starting multiple workflow servers..."
 
-# Build the server first
+# Kill any existing servers
+pkill -f workflow-engine
+sleep 2
+
+# Create logs directory if it doesn't exist
+mkdir -p go/logs
+
+# Build the server
 cd go
 make build
-cd ..
 
-# Start server instance 1 (default ports)
-echo "Starting Server Instance 1 (HTTP: 8080, gRPC: 9090)..."
-cd go
-echo "Running: ./bin/workflow-engine (default config)"
-./bin/workflow-engine &
+# Start Server 1 (HTTP: 8080, gRPC: 9090)
+echo "Starting Server 1 (HTTP: 8080, gRPC: 9090)..."
+./bin/workflow-engine -config config/config.yaml > logs/server1.log 2>&1 &
 SERVER1_PID=$!
 echo "Server 1 started with PID: $SERVER1_PID"
-cd ..
 
-# Wait a moment for first server to start
-sleep 2
+# Wait a moment between starts
+sleep 3
 
-# Start server instance 2 
-echo "Starting Server Instance 2 (HTTP: 8081, gRPC: 9091)..."
-cd go
-echo "Running: ./bin/workflow-engine -config config/config-instance2.yaml"
-./bin/workflow-engine -config config/config-instance2.yaml &
+# Start Server 2 (HTTP: 8081, gRPC: 9091)
+echo "Starting Server 2 (HTTP: 8081, gRPC: 9091)..."
+./bin/workflow-engine -config config/config-server2.yaml > logs/server2.log 2>&1 &
 SERVER2_PID=$!
 echo "Server 2 started with PID: $SERVER2_PID"
+
 cd ..
 
-# Wait a moment 
-sleep 2
-
-# Start server instance 3
-echo "Starting Server Instance 3 (HTTP: 8082, gRPC: 9092)..."
-cd go
-echo "Running: ./bin/workflow-engine -config config/config-instance3.yaml"
-./bin/workflow-engine -config config/config-instance3.yaml &
-SERVER3_PID=$!
-echo "Server 3 started with PID: $SERVER3_PID"
-cd ..
-
+echo "Both servers started successfully!"
+echo "Server 1: HTTP=8080, gRPC=9090, PID=$SERVER1_PID"
+echo "Server 2: HTTP=8081, gRPC=9091, PID=$SERVER2_PID"
 echo ""
-echo "🚀 All server instances started!"
-echo "📊 Server endpoints:"
-echo "   - Instance 1: HTTP=:8080, gRPC=:9090 (PID: $SERVER1_PID)"
-echo "   - Instance 2: HTTP=:8081, gRPC=:9091 (PID: $SERVER2_PID)" 
-echo "   - Instance 3: HTTP=:8082, gRPC=:9092 (PID: $SERVER3_PID)"
+echo "Health check URLs:"
+echo "Server 1: http://localhost:8080/health"
+echo "Server 2: http://localhost:8081/health"
 echo ""
-echo "💡 Test with:"
-echo "   curl http://localhost:8080/health"
-echo "   curl http://localhost:8081/health" 
-echo "   curl http://localhost:8082/health"
+echo "Log files:"
+echo "Server 1: go/logs/server1.log"
+echo "Server 2: go/logs/server2.log"
 echo ""
-echo "🛑 To stop all servers: pkill -f workflow-engine"
-
-# Keep script running to show process info
+echo "To stop servers: pkill -f workflow-engine"# Keep script running to show process info
 wait

@@ -2,21 +2,20 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
-	"net"
-	"net/http"
-	"sync"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/reflection"
 
 	"workflow-engine/internal/config"
 	"workflow-engine/internal/database"
-	grpcserver "workflow-engine/internal/grpc"
 	"workflow-engine/internal/handlers"
-	pb "workflow-engine/proto"
+	redis_client "workflow-engine/internal/redis"
+	"workflow-engine/internal/wpool"
 )
 
 func main() {
@@ -33,6 +32,8 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
+	log.Printf("Loaded config: Server=%s HTTP=:%d gRPC=:%d", cfg.Server.Name, cfg.Server.HTTP.Port, cfg.Server.GRPC.Port)
+
 	// Initialize database connection
 	db, err := database.NewDBFromDSN(cfg.GetDatabaseDSN())
 	if err != nil {
@@ -42,73 +43,63 @@ func main() {
 
 	log.Println("Connected to database successfully")
 
-	// Initialize gRPC server
-	grpcServer := grpcserver.NewWorkflowServer(db)
+	// Initialize Redis client for worker discovery
+	redisClient, err := redis_client.NewClient(&cfg.Redis)
+	if err != nil {
+		log.Fatalf("Failed to connect to Redis: %v", err)
+	}
+	defer redisClient.Close()
 
-	// Start gRPC server
-	var wg sync.WaitGroup
-	wg.Add(2)
+	log.Printf("Connected to Redis at %s:%d", cfg.Redis.Host, cfg.Redis.Port)
+	log.Println("Connected to Redis successfully")
 
-	go func() {
-		defer wg.Done()
-		startGRPCServer(cfg.GetGRPCAddress(), grpcServer)
-	}()
+	// Initialize worker pool manager for handling multiple workflows
+	workerPoolManager := wpool.NewWorkerPoolManager(db, redisClient)
+	defer workerPoolManager.Close()
+
+	log.Println("Worker pool manager initialized and monitoring for workers")
+
+	// Initialize HTTP server with worker pool integration
+	httpHandler := handlers.NewHTTPHandler(db, workerPoolManager)
 
 	// Start HTTP server
-	go func() {
-		defer wg.Done()
-		startHTTPServer(cfg.GetHTTPAddress(), db, grpcServer)
-	}()
-
-	log.Println("Workflow Engine Server started successfully")
-	log.Printf("HTTP Server running on port %d", cfg.Server.HTTP.Port)
-	log.Printf("gRPC Server running on port %d", cfg.Server.GRPC.Port)
-
-	wg.Wait()
-}
-
-func startGRPCServer(address string, workflowServer *grpcserver.WorkflowServer) {
-	lis, err := net.Listen("tcp", address)
-	if err != nil {
-		log.Fatalf("Failed to listen on address %s: %v", address, err)
-	}
-
-	s := grpc.NewServer()
-	pb.RegisterWorkflowServiceServer(s, workflowServer)
-
-	// Enable reflection for testing with grpcurl
-	reflection.Register(s)
-
-	log.Printf("gRPC server listening on %s", address)
-	if err := s.Serve(lis); err != nil {
-		log.Fatalf("Failed to serve gRPC: %v", err)
-	}
-}
-
-func startHTTPServer(address string, db *database.DB, grpcServer *grpcserver.WorkflowServer) {
-	// Initialize HTTP handlers
-	httpServer := handlers.NewHTTPServer(db, grpcServer)
-
-	// Setup Gin router
 	router := gin.Default()
 
-	// Add middleware
-	router.Use(gin.Logger())
-	router.Use(gin.Recovery())
+	// Workflow execution endpoints
+	router.POST("/api/v1/workflows/start", httpHandler.StartWorkflow)
+	router.POST("/api/v1/workflows/start-sync", httpHandler.StartWorkflowSync) // New sync endpoint
+	router.GET("/api/v1/workflows/:id", httpHandler.GetWorkflow)
 
-	// Health check endpoint
-	router.GET("/health", httpServer.HealthCheck)
+	// Workflow endpoint management (for testing and configuration)
+	router.POST("/api/v1/workflows/endpoints", httpHandler.RegisterWorkflowEndpoints)
+	router.GET("/api/v1/workflows/mappings", httpHandler.GetWorkflowMappings)
 
-	// API v1 endpoints
-	v1 := router.Group("/api/v1")
-	{
-		v1.POST("/workflows/start", httpServer.StartWorkflow)
-		v1.GET("/workflows/:id", httpServer.GetWorkflowStatus)
-		v1.GET("/connections", httpServer.GetActiveConnections)
-	}
+	// System endpoints
+	router.GET("/api/v1/connections", httpHandler.GetConnections)
+	router.GET("/api/v1/metrics", httpHandler.GetMetrics)
+	router.GET("/health", httpHandler.Health)
 
-	log.Printf("HTTP server listening on %s", address)
-	if err := http.ListenAndServe(address, router); err != nil {
-		log.Fatalf("Failed to serve HTTP: %v", err)
-	}
+	log.Printf("Starting HTTP server on port %d", cfg.Server.HTTP.Port)
+	log.Printf("Server name: %s", cfg.Server.Name)
+
+	// Start HTTP server in background
+	go func() {
+		if err := router.Run(fmt.Sprintf(":%d", cfg.Server.HTTP.Port)); err != nil {
+			log.Fatalf("Failed to start HTTP server: %v", err)
+		}
+	}()
+
+	log.Println("Server started successfully!")
+	log.Println("New Architecture:")
+	log.Println("- Workers register themselves in Redis when they start")
+	log.Println("- Server discovers workers via Redis pub/sub")
+	log.Println("- Server establishes connections TO workers (reverse of old pattern)")
+	log.Println("- Multiple servers can run - workers are distributed via Redis")
+
+	// Wait for interrupt signal
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	<-c
+
+	log.Println("Shutting down server...")
 }

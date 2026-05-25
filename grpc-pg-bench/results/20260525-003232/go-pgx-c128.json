@@ -1,0 +1,17 @@
+{
+  "label": "go-pgx",
+  "addr": "127.0.0.1:50051",
+  "concurrency": 128,
+  "connections": 4,
+  "payload_bytes": 256,
+  "duration_sec": 10.000272208,
+  "total_ok": 372362,
+  "total_err": 0,
+  "rps": 37235.18642843727,
+  "lat_mean_ms": 3.4346499508542223,
+  "lat_p50_ms": 3.132,
+  "lat_p90_ms": 4.044,
+  "lat_p99_ms": 8.889,
+  "lat_p999_ms": 15.057,
+  "lat_max_ms": 29.322
+}

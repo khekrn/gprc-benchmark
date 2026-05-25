@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package bench.v1;
+
+option go_package = "github.com/beam/grpc-pg-bench/gen/benchv1;benchv1";
+option java_multiple_files = true;
+option java_package = "com.beam.bench.proto";
+option java_outer_classname = "CommandProto";
+
+// CommandService models the minimal hot path of a workflow engine:
+// receive a command, do a tiny amount of CPU work, persist it, return the id.
+service CommandService {
+  // Execute unmarshals the request, performs small processing, inserts one
+  // row into Postgres, and returns the generated id.
+  rpc Execute(CommandRequest) returns (CommandResponse);
+}
+
+message CommandRequest {
+  // Logical workflow this command belongs to.
+  string workflow_id = 1;
+  // Command type/name, e.g. "approve", "reject".
+  string command_type = 2;
+  // Opaque JSON-ish payload that gets stored as-is.
+  string payload = 3;
+  // Client-side monotonically increasing sequence, used for sanity checks.
+  int64 seq = 4;
+}
+
+message CommandResponse {
+  // Database-generated primary key of the inserted row.
+  int64 id = 1;
+  // Server-computed checksum of the payload (the "small processing").
+  uint32 checksum = 2;
+  // Server receive timestamp in unix micros.
+  int64 received_at_micros = 3;
+}

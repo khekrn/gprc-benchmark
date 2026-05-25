@@ -19,163 +19,20 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	WorkflowService_RegisterEndpoint_FullMethodName = "/workflow.v1.WorkflowService/RegisterEndpoint"
-	WorkflowService_WorkflowStream_FullMethodName   = "/workflow.v1.WorkflowService/WorkflowStream"
-)
-
-// WorkflowServiceClient is the client API for WorkflowService service.
-//
-// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-//
-// Service definitions
-type WorkflowServiceClient interface {
-	// Unary RPC for endpoint registration
-	RegisterEndpoint(ctx context.Context, in *RegisterEndpointRequest, opts ...grpc.CallOption) (*RegisterEndpointResponse, error)
-	// Bidirectional streaming for workflow execution and state updates (server initiates to worker)
-	WorkflowStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[WorkflowStreamRequest, WorkflowStreamResponse], error)
-}
-
-type workflowServiceClient struct {
-	cc grpc.ClientConnInterface
-}
-
-func NewWorkflowServiceClient(cc grpc.ClientConnInterface) WorkflowServiceClient {
-	return &workflowServiceClient{cc}
-}
-
-func (c *workflowServiceClient) RegisterEndpoint(ctx context.Context, in *RegisterEndpointRequest, opts ...grpc.CallOption) (*RegisterEndpointResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RegisterEndpointResponse)
-	err := c.cc.Invoke(ctx, WorkflowService_RegisterEndpoint_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *workflowServiceClient) WorkflowStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[WorkflowStreamRequest, WorkflowStreamResponse], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &WorkflowService_ServiceDesc.Streams[0], WorkflowService_WorkflowStream_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[WorkflowStreamRequest, WorkflowStreamResponse]{ClientStream: stream}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type WorkflowService_WorkflowStreamClient = grpc.BidiStreamingClient[WorkflowStreamRequest, WorkflowStreamResponse]
-
-// WorkflowServiceServer is the server API for WorkflowService service.
-// All implementations must embed UnimplementedWorkflowServiceServer
-// for forward compatibility.
-//
-// Service definitions
-type WorkflowServiceServer interface {
-	// Unary RPC for endpoint registration
-	RegisterEndpoint(context.Context, *RegisterEndpointRequest) (*RegisterEndpointResponse, error)
-	// Bidirectional streaming for workflow execution and state updates (server initiates to worker)
-	WorkflowStream(grpc.BidiStreamingServer[WorkflowStreamRequest, WorkflowStreamResponse]) error
-	mustEmbedUnimplementedWorkflowServiceServer()
-}
-
-// UnimplementedWorkflowServiceServer must be embedded to have
-// forward compatible implementations.
-//
-// NOTE: this should be embedded by value instead of pointer to avoid a nil
-// pointer dereference when methods are called.
-type UnimplementedWorkflowServiceServer struct{}
-
-func (UnimplementedWorkflowServiceServer) RegisterEndpoint(context.Context, *RegisterEndpointRequest) (*RegisterEndpointResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method RegisterEndpoint not implemented")
-}
-func (UnimplementedWorkflowServiceServer) WorkflowStream(grpc.BidiStreamingServer[WorkflowStreamRequest, WorkflowStreamResponse]) error {
-	return status.Errorf(codes.Unimplemented, "method WorkflowStream not implemented")
-}
-func (UnimplementedWorkflowServiceServer) mustEmbedUnimplementedWorkflowServiceServer() {}
-func (UnimplementedWorkflowServiceServer) testEmbeddedByValue()                         {}
-
-// UnsafeWorkflowServiceServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to WorkflowServiceServer will
-// result in compilation errors.
-type UnsafeWorkflowServiceServer interface {
-	mustEmbedUnimplementedWorkflowServiceServer()
-}
-
-func RegisterWorkflowServiceServer(s grpc.ServiceRegistrar, srv WorkflowServiceServer) {
-	// If the following call pancis, it indicates UnimplementedWorkflowServiceServer was
-	// embedded by pointer and is nil.  This will cause panics if an
-	// unimplemented method is ever invoked, so we test this at initialization
-	// time to prevent it from happening at runtime later due to I/O.
-	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
-		t.testEmbeddedByValue()
-	}
-	s.RegisterService(&WorkflowService_ServiceDesc, srv)
-}
-
-func _WorkflowService_RegisterEndpoint_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RegisterEndpointRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(WorkflowServiceServer).RegisterEndpoint(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: WorkflowService_RegisterEndpoint_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkflowServiceServer).RegisterEndpoint(ctx, req.(*RegisterEndpointRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _WorkflowService_WorkflowStream_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(WorkflowServiceServer).WorkflowStream(&grpc.GenericServerStream[WorkflowStreamRequest, WorkflowStreamResponse]{ServerStream: stream})
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type WorkflowService_WorkflowStreamServer = grpc.BidiStreamingServer[WorkflowStreamRequest, WorkflowStreamResponse]
-
-// WorkflowService_ServiceDesc is the grpc.ServiceDesc for WorkflowService service.
-// It's only intended for direct use with grpc.RegisterService,
-// and not to be introspected or modified (even as a copy)
-var WorkflowService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "workflow.v1.WorkflowService",
-	HandlerType: (*WorkflowServiceServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "RegisterEndpoint",
-			Handler:    _WorkflowService_RegisterEndpoint_Handler,
-		},
-	},
-	Streams: []grpc.StreamDesc{
-		{
-			StreamName:    "WorkflowStream",
-			Handler:       _WorkflowService_WorkflowStream_Handler,
-			ServerStreams: true,
-			ClientStreams: true,
-		},
-	},
-	Metadata: "proto/workflow.proto",
-}
-
-const (
-	WorkerService_StartWorkflow_FullMethodName   = "/workflow.v1.WorkerService/StartWorkflow"
-	WorkerService_ExecuteWorkflow_FullMethodName = "/workflow.v1.WorkerService/ExecuteWorkflow"
+	WorkerService_HealthCheck_FullMethodName    = "/workflow.v1.WorkerService/HealthCheck"
+	WorkerService_WorkflowStream_FullMethodName = "/workflow.v1.WorkerService/WorkflowStream"
 )
 
 // WorkerServiceClient is the client API for WorkerService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// Worker service - implemented by workers to receive workflow execution requests
+// Worker service - implemented by workers
 type WorkerServiceClient interface {
-	// Unary RPC to trigger workflow execution (server calls worker)
-	StartWorkflow(ctx context.Context, in *WorkflowExecutionRequest, opts ...grpc.CallOption) (*WorkflowExecutionResponse, error)
-	// Bidirectional streaming for workflow execution (worker connects to server after StartWorkflow)
-	ExecuteWorkflow(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[WorkflowStreamResponse, WorkflowStreamRequest], error)
+	// Health check endpoint
+	HealthCheck(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (*HealthCheckResponse, error)
+	// Bidirectional streaming: Server connects to worker and they exchange messages
+	WorkflowStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ServerToWorkerMessage, WorkerToServerMessage], error)
 }
 
 type workerServiceClient struct {
@@ -186,39 +43,39 @@ func NewWorkerServiceClient(cc grpc.ClientConnInterface) WorkerServiceClient {
 	return &workerServiceClient{cc}
 }
 
-func (c *workerServiceClient) StartWorkflow(ctx context.Context, in *WorkflowExecutionRequest, opts ...grpc.CallOption) (*WorkflowExecutionResponse, error) {
+func (c *workerServiceClient) HealthCheck(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (*HealthCheckResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(WorkflowExecutionResponse)
-	err := c.cc.Invoke(ctx, WorkerService_StartWorkflow_FullMethodName, in, out, cOpts...)
+	out := new(HealthCheckResponse)
+	err := c.cc.Invoke(ctx, WorkerService_HealthCheck_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *workerServiceClient) ExecuteWorkflow(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[WorkflowStreamResponse, WorkflowStreamRequest], error) {
+func (c *workerServiceClient) WorkflowStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ServerToWorkerMessage, WorkerToServerMessage], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[0], WorkerService_ExecuteWorkflow_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[0], WorkerService_WorkflowStream_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[WorkflowStreamResponse, WorkflowStreamRequest]{ClientStream: stream}
+	x := &grpc.GenericClientStream[ServerToWorkerMessage, WorkerToServerMessage]{ClientStream: stream}
 	return x, nil
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type WorkerService_ExecuteWorkflowClient = grpc.BidiStreamingClient[WorkflowStreamResponse, WorkflowStreamRequest]
+type WorkerService_WorkflowStreamClient = grpc.BidiStreamingClient[ServerToWorkerMessage, WorkerToServerMessage]
 
 // WorkerServiceServer is the server API for WorkerService service.
 // All implementations must embed UnimplementedWorkerServiceServer
 // for forward compatibility.
 //
-// Worker service - implemented by workers to receive workflow execution requests
+// Worker service - implemented by workers
 type WorkerServiceServer interface {
-	// Unary RPC to trigger workflow execution (server calls worker)
-	StartWorkflow(context.Context, *WorkflowExecutionRequest) (*WorkflowExecutionResponse, error)
-	// Bidirectional streaming for workflow execution (worker connects to server after StartWorkflow)
-	ExecuteWorkflow(grpc.BidiStreamingServer[WorkflowStreamResponse, WorkflowStreamRequest]) error
+	// Health check endpoint
+	HealthCheck(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error)
+	// Bidirectional streaming: Server connects to worker and they exchange messages
+	WorkflowStream(grpc.BidiStreamingServer[ServerToWorkerMessage, WorkerToServerMessage]) error
 	mustEmbedUnimplementedWorkerServiceServer()
 }
 
@@ -229,11 +86,11 @@ type WorkerServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedWorkerServiceServer struct{}
 
-func (UnimplementedWorkerServiceServer) StartWorkflow(context.Context, *WorkflowExecutionRequest) (*WorkflowExecutionResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method StartWorkflow not implemented")
+func (UnimplementedWorkerServiceServer) HealthCheck(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method HealthCheck not implemented")
 }
-func (UnimplementedWorkerServiceServer) ExecuteWorkflow(grpc.BidiStreamingServer[WorkflowStreamResponse, WorkflowStreamRequest]) error {
-	return status.Errorf(codes.Unimplemented, "method ExecuteWorkflow not implemented")
+func (UnimplementedWorkerServiceServer) WorkflowStream(grpc.BidiStreamingServer[ServerToWorkerMessage, WorkerToServerMessage]) error {
+	return status.Errorf(codes.Unimplemented, "method WorkflowStream not implemented")
 }
 func (UnimplementedWorkerServiceServer) mustEmbedUnimplementedWorkerServiceServer() {}
 func (UnimplementedWorkerServiceServer) testEmbeddedByValue()                       {}
@@ -256,30 +113,30 @@ func RegisterWorkerServiceServer(s grpc.ServiceRegistrar, srv WorkerServiceServe
 	s.RegisterService(&WorkerService_ServiceDesc, srv)
 }
 
-func _WorkerService_StartWorkflow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(WorkflowExecutionRequest)
+func _WorkerService_HealthCheck_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HealthCheckRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(WorkerServiceServer).StartWorkflow(ctx, in)
+		return srv.(WorkerServiceServer).HealthCheck(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: WorkerService_StartWorkflow_FullMethodName,
+		FullMethod: WorkerService_HealthCheck_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkerServiceServer).StartWorkflow(ctx, req.(*WorkflowExecutionRequest))
+		return srv.(WorkerServiceServer).HealthCheck(ctx, req.(*HealthCheckRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _WorkerService_ExecuteWorkflow_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(WorkerServiceServer).ExecuteWorkflow(&grpc.GenericServerStream[WorkflowStreamResponse, WorkflowStreamRequest]{ServerStream: stream})
+func _WorkerService_WorkflowStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(WorkerServiceServer).WorkflowStream(&grpc.GenericServerStream[ServerToWorkerMessage, WorkerToServerMessage]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type WorkerService_ExecuteWorkflowServer = grpc.BidiStreamingServer[WorkflowStreamResponse, WorkflowStreamRequest]
+type WorkerService_WorkflowStreamServer = grpc.BidiStreamingServer[ServerToWorkerMessage, WorkerToServerMessage]
 
 // WorkerService_ServiceDesc is the grpc.ServiceDesc for WorkerService service.
 // It's only intended for direct use with grpc.RegisterService,
@@ -289,14 +146,14 @@ var WorkerService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*WorkerServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "StartWorkflow",
-			Handler:    _WorkerService_StartWorkflow_Handler,
+			MethodName: "HealthCheck",
+			Handler:    _WorkerService_HealthCheck_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "ExecuteWorkflow",
-			Handler:       _WorkerService_ExecuteWorkflow_Handler,
+			StreamName:    "WorkflowStream",
+			Handler:       _WorkerService_WorkflowStream_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
 		},

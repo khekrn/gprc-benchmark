@@ -13,6 +13,7 @@ import (
 // Config holds the worker configuration
 type Config struct {
 	Worker  WorkerConfig  `yaml:"worker"`
+	Redis   RedisConfig   `yaml:"redis"`
 	Servers ServersConfig `yaml:"servers"`
 	Logging LoggingConfig `yaml:"logging"`
 }
@@ -48,6 +49,16 @@ type LoadBalancingConfig struct {
 // LoggingConfig holds logging configuration
 type LoggingConfig struct {
 	Level string `yaml:"level"`
+}
+
+// RedisConfig holds Redis configuration
+type RedisConfig struct {
+	Host                string `yaml:"host"`
+	Port                int    `yaml:"port"`
+	Password            string `yaml:"password"`
+	DB                  int    `yaml:"db"`
+	WorkerRegistryKey   string `yaml:"worker_registry_key"`
+	WorkerEventsChannel string `yaml:"worker_events_channel"`
 }
 
 // LoadBalancer handles client-side load balancing
