@@ -1,0 +1,25 @@
+timestamp: 20260525-222611
+stacks: go-pgx kotlin-vertx rust-tokio
+concurrency_levels: 1 8 32 64 128
+warmup: 15s  duration: 60s  payload: 256B  client_conns: 4
+pg_pool: min=4 max=16
+server_cpus: 2,3  client_cpus: 4,5  mem_max: 4G
+gomaxprocs: 2  vertx_event_loops: 2  jvm_opts: -Xms512m -Xmx1024m -XX:+UseZGC -XX:+AlwaysPreTouch
+--- uname ---
+Linux kk 6.17.0-1001-asahi-arm #1-Ubuntu SMP PREEMPT_DYNAMIC Tue Dec 23 07:28:49 UTC 2025 aarch64 aarch64 aarch64 GNU/Linux
+--- cpu ---
+CPU(s):                                  10
+On-line CPU(s) list:                     0-9
+Model name:                              Icestorm-M1-Pro
+CPU(s) scaling MHz:                      100%
+CPU max MHz:                             2064.0000
+CPU min MHz:                             600.0000
+Model name:                              Firestorm-M1-Pro
+CPU(s) scaling MHz:                      75%
+CPU max MHz:                             3036.0000
+CPU min MHz:                             600.0000
+NUMA node0 CPU(s):                       0-9
+--- mem ---
+               total        used        free      shared  buff/cache   available
+Mem:            15Gi       3.9Gi        11Gi       1.1Gi       1.8Gi        11Gi
+Swap:             0B          0B          0B

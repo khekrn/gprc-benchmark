@@ -57,19 +57,13 @@ func main() {
 		clients[i] = benchv1.NewCommandServiceClient(cc)
 	}
 
-	payload := make([]byte, *payloadSize)
-	for i := range payload {
-		payload[i] = byte('a' + (i % 26))
-	}
-	payloadStr := string(payload)
-
 	// ---- Warmup (also primes prepared-statement caches and pools) ----
 	fmt.Fprintf(os.Stderr, "[%s] warmup %s @ concurrency %d ...\n", *label, *warmup, *conc)
-	runPhase(clients, *conc, *warmup, payloadStr, false)
+	runPhase(clients, *conc, *warmup, *payloadSize, false)
 
 	// ---- Measured phase ----
 	fmt.Fprintf(os.Stderr, "[%s] measuring %s @ concurrency %d ...\n", *label, *dur, *conc)
-	res := runPhase(clients, *conc, *dur, payloadStr, true)
+	res := runPhase(clients, *conc, *dur, *payloadSize, true)
 	res.Label = *label
 	res.Addr = *addr
 	res.Concurrency = *conc
@@ -110,13 +104,16 @@ type Result struct {
 	LatMaxMs     float64 `json:"lat_max_ms"`
 }
 
-func runPhase(clients []benchv1.CommandServiceClient, conc int, dur time.Duration, payload string, record bool) Result {
+func runPhase(clients []benchv1.CommandServiceClient, conc int, dur time.Duration, payloadSize int, record bool) Result {
 	ctx, cancel := context.WithTimeout(context.Background(), dur)
 	defer cancel()
 
 	var okCount, errCount int64
 	// Per-worker latency slices avoid lock contention; merged at the end.
 	perWorker := make([][]float64, conc)
+
+	// Realistic command-type mix so the server's hot path sees variety.
+	cmdTypes := []string{"approve", "reject", "submit", "review", "execute", "cancel", "retry", "complete"}
 
 	var wg sync.WaitGroup
 	start := time.Now()
@@ -125,7 +122,11 @@ func runPhase(clients []benchv1.CommandServiceClient, conc int, dur time.Duratio
 		go func(id int) {
 			defer wg.Done()
 			cl := clients[id%len(clients)]
-			rng := rand.New(rand.NewSource(int64(id)*1_000_003 + 1))
+			rng := rand.New(rand.NewSource(int64(id)*1_000_003 + time.Now().UnixNano()))
+			// Per-worker scratch buffer reused across requests — avoids
+			// allocating a fresh []byte every call, while still rewriting
+			// the bytes per request so CPU/PG caches can't help the server.
+			buf := make([]byte, payloadSize)
 			var lat []float64
 			if record {
 				lat = make([]float64, 0, 1<<16)
@@ -139,10 +140,30 @@ func runPhase(clients []benchv1.CommandServiceClient, conc int, dur time.Duratio
 				default:
 				}
 				seq++
+				// Fresh per-request payload. The proto field is `string`,
+				// which proto3 requires to be valid UTF-8 — random bytes
+				// would fail marshal validation. So we map random bits onto
+				// 64 printable ASCII characters (6 bits/byte), still enough
+				// entropy to defeat the CPU/L3 + PG buffer caches.
+				const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+				for i := 0; i < len(buf); i += 10 {
+					u := rng.Uint64()
+					end := i + 10
+					if end > len(buf) {
+						end = len(buf)
+					}
+					for j := i; j < end; j++ {
+						buf[j] = alphabet[u&0x3f]
+						u >>= 6
+					}
+				}
+				// Workflow IDs from a wide keyspace (~2B) so the PG btree
+				// index doesn't reduce to a hot-page cache, and so the
+				// server's checksum + insert see varied input.
 				req := &benchv1.CommandRequest{
-					WorkflowId:  fmt.Sprintf("wf-%d-%d", id, rng.Intn(1000)),
-					CommandType: "execute",
-					Payload:     payload,
+					WorkflowId:  fmt.Sprintf("wf-%d-%010d", id, rng.Uint32()),
+					CommandType: cmdTypes[rng.Intn(len(cmdTypes))],
+					Payload:     string(buf),
 					Seq:         seq,
 				}
 				t0 := time.Now()

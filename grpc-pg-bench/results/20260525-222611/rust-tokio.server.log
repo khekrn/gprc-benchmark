@@ -1,0 +1,20 @@
+[2m2026-05-25T17:09:07.999596Z[0m [32m INFO[0m [2mrust_tokio_bench[0m[2m:[0m rust-tokio (axum) server listening [3maddr[0m[2m=[0m127.0.0.1:50053 [3mpool_min[0m[2m=[0m4 [3mpool_max[0m[2m=[0m16 [3mworkers[0m[2m=[0m2
+[2m2026-05-25T17:09:08.475666Z[0m [33m WARN[0m [2mrust_tokio_bench[0m[2m:[0m h2 connection error [3merr[0m[2m=[0mconnection error
+[2m2026-05-25T17:10:24.581116Z[0m [32m INFO[0m [2mrust_tokio_bench[0m[2m:[0m shutdown signal received, draining in-flight RPCs
+[2m2026-05-25T17:10:24.581148Z[0m [32m INFO[0m [2mrust_tokio_bench[0m[2m:[0m graceful stop complete
+[2m2026-05-25T17:10:24.624541Z[0m [32m INFO[0m [2mrust_tokio_bench[0m[2m:[0m rust-tokio (axum) server listening [3maddr[0m[2m=[0m127.0.0.1:50053 [3mpool_min[0m[2m=[0m4 [3mpool_max[0m[2m=[0m16 [3mworkers[0m[2m=[0m2
+[2m2026-05-25T17:10:25.102421Z[0m [33m WARN[0m [2mrust_tokio_bench[0m[2m:[0m h2 connection error [3merr[0m[2m=[0mconnection error
+[2m2026-05-25T17:11:41.247320Z[0m [32m INFO[0m [2mrust_tokio_bench[0m[2m:[0m shutdown signal received, draining in-flight RPCs
+[2m2026-05-25T17:11:41.247393Z[0m [32m INFO[0m [2mrust_tokio_bench[0m[2m:[0m graceful stop complete
+[2m2026-05-25T17:11:41.298303Z[0m [32m INFO[0m [2mrust_tokio_bench[0m[2m:[0m rust-tokio (axum) server listening [3maddr[0m[2m=[0m127.0.0.1:50053 [3mpool_min[0m[2m=[0m4 [3mpool_max[0m[2m=[0m16 [3mworkers[0m[2m=[0m2
+[2m2026-05-25T17:11:41.774382Z[0m [33m WARN[0m [2mrust_tokio_bench[0m[2m:[0m h2 connection error [3merr[0m[2m=[0mconnection error
+[2m2026-05-25T17:12:59.025114Z[0m [32m INFO[0m [2mrust_tokio_bench[0m[2m:[0m shutdown signal received, draining in-flight RPCs
+[2m2026-05-25T17:12:59.025204Z[0m [32m INFO[0m [2mrust_tokio_bench[0m[2m:[0m graceful stop complete
+[2m2026-05-25T17:12:59.070148Z[0m [32m INFO[0m [2mrust_tokio_bench[0m[2m:[0m rust-tokio (axum) server listening [3maddr[0m[2m=[0m127.0.0.1:50053 [3mpool_min[0m[2m=[0m4 [3mpool_max[0m[2m=[0m16 [3mworkers[0m[2m=[0m2
+[2m2026-05-25T17:12:59.553120Z[0m [33m WARN[0m [2mrust_tokio_bench[0m[2m:[0m h2 connection error [3merr[0m[2m=[0mconnection error
+[2m2026-05-25T17:14:16.300323Z[0m [32m INFO[0m [2mrust_tokio_bench[0m[2m:[0m shutdown signal received, draining in-flight RPCs
+[2m2026-05-25T17:14:16.300389Z[0m [32m INFO[0m [2mrust_tokio_bench[0m[2m:[0m graceful stop complete
+[2m2026-05-25T17:14:16.352463Z[0m [32m INFO[0m [2mrust_tokio_bench[0m[2m:[0m rust-tokio (axum) server listening [3maddr[0m[2m=[0m127.0.0.1:50053 [3mpool_min[0m[2m=[0m4 [3mpool_max[0m[2m=[0m16 [3mworkers[0m[2m=[0m2
+[2m2026-05-25T17:14:16.831316Z[0m [33m WARN[0m [2mrust_tokio_bench[0m[2m:[0m h2 connection error [3merr[0m[2m=[0mconnection error
+[2m2026-05-25T17:15:33.125228Z[0m [32m INFO[0m [2mrust_tokio_bench[0m[2m:[0m shutdown signal received, draining in-flight RPCs
+[2m2026-05-25T17:15:33.125275Z[0m [32m INFO[0m [2mrust_tokio_bench[0m[2m:[0m graceful stop complete

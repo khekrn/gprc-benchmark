@@ -146,6 +146,85 @@ for s in sorted({r['stack'] for r in rows}):
 PY
 ```
 
+## Results
+
+Latest sweep: `results/20260525-222611/` — 3 stacks × 5 concurrency levels,
+`WARMUP=15s DURATION=60s`, server pinned to two P-cores (cpu 2-3) with a 4 GB
+memory cap via `systemd-run --user --scope`, loadgen pinned to cpu 4-5.
+Hardware: M1 Pro / Asahi Linux, Postgres 16 local. Zero application errors
+across all 15 runs.
+
+`c` = concurrency = number of in-flight gRPC requests the loadgen keeps open
+simultaneously (one per worker goroutine). `c=1` measures single-shot
+round-trip cost; `c=128` measures saturation behavior.
+
+### Peak throughput
+
+| Rank | Stack          | Peak RPS | At c= |
+|-----:|----------------|---------:|------:|
+| 1    | rust-tokio     |  61,812  |  64   |
+| 2    | kotlin-vertx   |  59,940  |  32   |
+| 3    | go-pgx         |  49,324  | 128   |
+
+### Steady-state latency (ms)
+
+| Stack         | p50 @ c=64 | p99 @ c=64 | p99 @ c=128 |
+|---------------|-----------:|-----------:|------------:|
+| rust-tokio    |     0.993  |     2.756  |      4.509  |
+| kotlin-vertx  |     0.963  |     2.596  |      4.913  |
+| go-pgx        |     1.150  |     4.138  |      5.583  |
+
+### Single-shot latency (c=1, ms)
+
+| Stack         |  p50  |  p99  |
+|---------------|------:|------:|
+| kotlin-vertx  | 0.129 | 0.235 |
+| go-pgx        | 0.140 | 0.227 |
+| rust-tokio    | 0.151 | 0.278 |
+
+All three are within ~50 µs of each other — round-trip cost is essentially
+equal.
+
+### Tail behavior (`max_ms` across all runs)
+
+- **go-pgx**: cleanest — a single 590 ms outlier; otherwise 16–41 ms.
+- **rust-tokio**: two outliers >250 ms (max 577 ms), likely tokio scheduler hiccups.
+- **kotlin-vertx**: three outliers >280 ms (max 860 ms), likely JVM GC pauses.
+
+p999 itself stays in the 3–9 ms range for all three, so these are
+worst-of-3-million observations, not systemic.
+
+### Full table
+
+| stack         |   c | RPS    | p50 ms | p90 ms | p99 ms | p999 ms | max ms  |
+|---------------|----:|-------:|-------:|-------:|-------:|--------:|--------:|
+| go-pgx        |   1 |  6,760 |  0.140 |  0.178 |  0.227 |   0.393 |   4.219 |
+| go-pgx        |   8 | 34,493 |  0.210 |  0.311 |  0.623 |   1.755 |  16.025 |
+| go-pgx        |  32 | 47,655 |  0.567 |  0.992 |  3.044 |   4.658 |  18.382 |
+| go-pgx        |  64 | 45,423 |  1.150 |  1.871 |  4.138 |   6.606 | 590.748 |
+| go-pgx        | 128 | 49,324 |  2.453 |  3.427 |  5.583 |   7.670 |  35.011 |
+| kotlin-vertx  |   1 |  7,258 |  0.129 |  0.177 |  0.235 |   0.412 |   6.291 |
+| kotlin-vertx  |   8 | 38,330 |  0.193 |  0.279 |  0.439 |   1.462 |  26.840 |
+| kotlin-vertx  |  32 | 59,940 |  0.472 |  0.686 |  1.453 |   3.674 | 480.275 |
+| kotlin-vertx  |  64 | 58,143 |  0.963 |  1.261 |  2.596 |   5.457 | 860.412 |
+| kotlin-vertx  | 128 | 59,500 |  1.996 |  2.447 |  4.913 |   9.156 | 280.414 |
+| rust-tokio    |   1 |  6,025 |  0.151 |  0.243 |  0.278 |   0.426 |   7.527 |
+| rust-tokio    |   8 | 42,882 |  0.177 |  0.240 |  0.358 |   0.832 |  15.830 |
+| rust-tokio    |  32 | 59,962 |  0.479 |  0.660 |  1.604 |   4.346 | 577.421 |
+| rust-tokio    |  64 | 61,812 |  0.993 |  1.223 |  2.756 |   5.096 | 252.271 |
+| rust-tokio    | 128 | 60,643 |  2.014 |  2.355 |  4.509 |   7.145 | 498.189 |
+
+### Verdict
+
+1. **rust-tokio** — best peak throughput, best p99 at saturation.
+2. **kotlin-vertx** — within 3% on RPS, best p50, but worst single-request max
+   latency (GC tail).
+3. **go-pgx** — lowest throughput ceiling, highest steady-state latency, but
+   most predictable tail.
+
+Rust and Kotlin are functionally tied for performance; the choice should
+come down to ecosystem fit and team expertise rather than these numbers.
+
 ## Why these libraries
 
 - **pgx** is the de-facto high-performance native Postgres driver for Go and

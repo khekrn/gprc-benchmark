@@ -1,0 +1,33 @@
+[package]
+name    = "rust-tokio-bench"
+version = "0.1.0"
+edition = "2024"
+
+# Single binary, kept small on purpose so it's easy to read against the Go and
+# Kotlin equivalents. No workspace, no feature gymnastics.
+
+[dependencies]
+tokio              = { version = "1", features = ["macros", "rt-multi-thread", "signal", "net"] }
+axum               = "0.7"
+tonic              = "0.12"
+tonic-health       = "0.12"
+prost              = "0.13"
+tokio-postgres     = "0.7"
+deadpool-postgres  = "0.14"
+hyper              = { version = "1", features = ["server", "http2"] }
+hyper-util         = { version = "0.1", features = ["server-auto", "tokio", "service"] }
+tower              = "0.5"
+fnv                = "1"
+tracing            = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[build-dependencies]
+tonic-build = "0.12"
+
+[profile.release]
+# Smaller binary, faster runtime — matches what we'd ship.
+lto           = "thin"
+codegen-units = 1
+strip         = "symbols"
+opt-level     = 3
+panic         = "abort"

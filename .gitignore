@@ -4,3 +4,4 @@
 /grpc-pg-bench/kotlin-vertx/.idea/
 /grpc-pg-bench/kotlin-vertx/dependency-reduced-pom.xml
 /grpc-pg-bench/kotlin-vertx/target/
+grpc-pg-bench/rust-tokio/target/
