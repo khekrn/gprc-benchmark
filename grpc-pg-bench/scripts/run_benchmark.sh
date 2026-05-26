@@ -39,7 +39,9 @@ TS="$(date +%Y%m%d-%H%M%S)"
 RUN_DIR="${RESULTS_DIR}/${TS}"
 mkdir -p "${RUN_DIR}"
 SUMMARY="${RUN_DIR}/summary.csv"
-echo "stack,concurrency,rps,p50_ms,p90_ms,p99_ms,p999_ms,max_ms,total_ok,total_err" > "${SUMMARY}"
+# Per-op (write/read) columns are appended; they're zero/0.000 when the
+# loadgen mode is not "mixed" so the CSV stays uniform across runs.
+echo "stack,concurrency,mode,rps,p50_ms,p90_ms,p99_ms,p999_ms,max_ms,total_ok,total_err,write_rps,write_p50_ms,write_p99_ms,read_rps,read_p50_ms,read_p99_ms" > "${SUMMARY}"
 
 # Record environment for reproducibility.
 {
@@ -47,6 +49,7 @@ echo "stack,concurrency,rps,p50_ms,p90_ms,p99_ms,p999_ms,max_ms,total_ok,total_e
   echo "stacks: ${STACKS}"
   echo "concurrency_levels: ${CONCURRENCY_LEVELS}"
   echo "warmup: ${WARMUP}  duration: ${DURATION}  payload: ${PAYLOAD}B  client_conns: ${CLIENT_CONNS}"
+  echo "loadgen_mode: ${LOADGEN_MODE}  read_pct: ${LOADGEN_READ_PCT}  keyspace: ${LOADGEN_KEYSPACE}"
   echo "pg_pool: min=${PG_POOL_MIN} max=${PG_POOL_MAX}"
   echo "server_cpus: ${PIN_SERVER_CPUS}  client_cpus: ${PIN_CLIENT_CPUS}  mem_max: ${MEM_MAX:-(unset)}"
   echo "gomaxprocs: ${GOMAXPROCS}  vertx_event_loops: ${VERTX_EVENT_LOOPS}  jvm_opts: ${JVM_OPTS}"
@@ -56,7 +59,14 @@ echo "stack,concurrency,rps,p50_ms,p90_ms,p99_ms,p999_ms,max_ms,total_ok,total_e
 } > "${RUN_DIR}/environment.txt"
 
 truncate_table() {
-  PGPASSWORD="${PG_PASSWORD}" psql "${DATABASE_URL}" -q -c "TRUNCATE commands RESTART IDENTITY;" >/dev/null 2>&1 || true
+  # Wipe all bench tables so each run starts from id=1 and an empty state.
+  # `|| true` because workflow_state/outbox may not exist on older DBs; the
+  # second psql with IF NOT EXISTS handles the create-on-first-run case.
+  PGPASSWORD="${PG_PASSWORD}" psql "${DATABASE_URL}" -q \
+    -c "TRUNCATE commands, workflow_state, outbox RESTART IDENTITY;" \
+    >/dev/null 2>&1 || \
+  PGPASSWORD="${PG_PASSWORD}" psql "${DATABASE_URL}" -q \
+    -c "TRUNCATE commands RESTART IDENTITY;" >/dev/null 2>&1 || true
 }
 
 wait_for_port() {
@@ -177,6 +187,9 @@ for stack in ${STACKS}; do
       -warmup "${WARMUP}" \
       -payload "${PAYLOAD}" \
       -conns "${CLIENT_CONNS}" \
+      -mode "${LOADGEN_MODE}" \
+      -read-pct "${LOADGEN_READ_PCT}" \
+      -keyspace "${LOADGEN_KEYSPACE}" \
       -label "${stack}" \
       -out "${OUT_JSON}" \
       > "${RUN_DIR}/${stack}-c${c}.stdout" 2> "${RUN_DIR}/${stack}-c${c}.stderr" || true
@@ -190,9 +203,14 @@ import json, sys
 path, stack, c = sys.argv[1], sys.argv[2], sys.argv[3]
 with open(path) as f:
     r = json.load(f)
-print("{},{},{:.0f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{},{}".format(
-    stack, c, r["rps"], r["lat_p50_ms"], r["lat_p90_ms"], r["lat_p99_ms"],
-    r["lat_p999_ms"], r["lat_max_ms"], r["total_ok"], r["total_err"]))
+# Per-op fields are missing on older JSON outputs; default to 0.
+def g(key, default=0): return r.get(key, default)
+print("{},{},{},{:.0f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{},{},{:.0f},{:.3f},{:.3f},{:.0f},{:.3f},{:.3f}".format(
+    stack, c, g("mode", "execute"),
+    r["rps"], r["lat_p50_ms"], r["lat_p90_ms"], r["lat_p99_ms"],
+    r["lat_p999_ms"], r["lat_max_ms"], r["total_ok"], r["total_err"],
+    g("write_rps"), g("write_p50_ms"), g("write_p99_ms"),
+    g("read_rps"),  g("read_p50_ms"),  g("read_p99_ms")))
 PY
     fi
   done

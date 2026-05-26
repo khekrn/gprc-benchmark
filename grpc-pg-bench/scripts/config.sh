@@ -66,6 +66,14 @@ export CLIENT_CONNS="${CLIENT_CONNS:-4}"
 # Concurrency levels to sweep. Edit to taste.
 export CONCURRENCY_LEVELS="${CONCURRENCY_LEVELS:-1 8 32 64 128}"
 
+# Workload shape. Passed to loadgen as -mode/-read-pct/-keyspace.
+#   execute  — single autocommit INSERT (original benchmark, default)
+#   exectx   — 3-statement TX (INSERT command + UPSERT state + INSERT outbox)
+#   mixed    — per-iter coin flip between ExecuteTx and GetState
+export LOADGEN_MODE="${LOADGEN_MODE:-execute}"
+export LOADGEN_READ_PCT="${LOADGEN_READ_PCT:-20}"
+export LOADGEN_KEYSPACE="${LOADGEN_KEYSPACE:-10000}"
+
 # Directories
 export ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export RESULTS_DIR="${RESULTS_DIR:-${ROOT_DIR}/results}"
