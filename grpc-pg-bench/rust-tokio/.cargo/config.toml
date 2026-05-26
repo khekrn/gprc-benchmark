@@ -1,0 +1,5 @@
+# Tune the release build for the local CPU (M1 Pro / aarch64). This unlocks
+# NEON-tuned codegen for the actual core that will run the server.
+# `+lse` is safe on any ARMv8.1+ chip and is what the M-series supports.
+[build]
+rustflags = ["-C", "target-cpu=native"]

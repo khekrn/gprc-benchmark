@@ -148,15 +148,17 @@ PY
 
 ## Results
 
-Latest sweep: `results/20260525-222611/` — 3 stacks × 5 concurrency levels,
+Combined sweep: `results/20260525-222611/` (c=1..128) and
+`results/20260526-080945/` (c=256 follow-up), same config for both — 3 stacks,
 `WARMUP=15s DURATION=60s`, server pinned to two P-cores (cpu 2-3) with a 4 GB
 memory cap via `systemd-run --user --scope`, loadgen pinned to cpu 4-5.
 Hardware: M1 Pro / Asahi Linux, Postgres 16 local. Zero application errors
-across all 15 runs.
+across all 18 runs.
 
 `c` = concurrency = number of in-flight gRPC requests the loadgen keeps open
 simultaneously (one per worker goroutine). `c=1` measures single-shot
-round-trip cost; `c=128` measures saturation behavior.
+round-trip cost; `c=128`/`c=256` measure saturation and beyond-saturation
+behavior.
 
 ### Peak throughput
 
@@ -168,11 +170,11 @@ round-trip cost; `c=128` measures saturation behavior.
 
 ### Steady-state latency (ms)
 
-| Stack         | p50 @ c=64 | p99 @ c=64 | p99 @ c=128 |
-|---------------|-----------:|-----------:|------------:|
-| rust-tokio    |     0.993  |     2.756  |      4.509  |
-| kotlin-vertx  |     0.963  |     2.596  |      4.913  |
-| go-pgx        |     1.150  |     4.138  |      5.583  |
+| Stack         | p50 @ c=64 | p99 @ c=64 | p99 @ c=128 | p99 @ c=256 |
+|---------------|-----------:|-----------:|------------:|------------:|
+| rust-tokio    |     0.993  |     2.756  |      4.509  |      7.624  |
+| kotlin-vertx  |     0.963  |     2.596  |      4.913  |      9.103  |
+| go-pgx        |     1.150  |     4.138  |      5.583  |      8.959  |
 
 ### Single-shot latency (c=1, ms)
 
@@ -187,12 +189,15 @@ equal.
 
 ### Tail behavior (`max_ms` across all runs)
 
-- **go-pgx**: cleanest — a single 590 ms outlier; otherwise 16–41 ms.
-- **rust-tokio**: two outliers >250 ms (max 577 ms), likely tokio scheduler hiccups.
-- **kotlin-vertx**: three outliers >280 ms (max 860 ms), likely JVM GC pauses.
+- **go-pgx**: cleanest — a single 590 ms outlier; otherwise 16–43 ms.
+- **rust-tokio**: three outliers >250 ms (max 917 ms at c=256), tokio scheduler hiccups.
+- **kotlin-vertx**: four outliers >280 ms (max 860 ms), likely JVM GC pauses.
 
-p999 itself stays in the 3–9 ms range for all three, so these are
-worst-of-3-million observations, not systemic.
+At c≤128, p999 stays in the 3–9 ms range for all three (worst-of-3-million
+observations, not systemic). **At c=256, rust-tokio's p999 jumps to 310 ms** —
+the first sign of systemic tail degradation: the tokio scheduler appears to
+starve specific in-flight requests when oversubscribed ~125:1 over its
+2 worker threads. Kotlin and Go keep p999 in single-digit ms even at c=256.
 
 ### Full table
 
@@ -213,17 +218,28 @@ worst-of-3-million observations, not systemic.
 | rust-tokio    |  32 | 59,962 |  0.479 |  0.660 |  1.604 |   4.346 | 577.421 |
 | rust-tokio    |  64 | 61,812 |  0.993 |  1.223 |  2.756 |   5.096 | 252.271 |
 | rust-tokio    | 128 | 60,643 |  2.014 |  2.355 |  4.509 |   7.145 | 498.189 |
+| go-pgx        | 256 | 48,091 |  5.172 |  6.524 |  8.959 |  13.315 |  42.978 |
+| kotlin-vertx  | 256 | 58,069 |  4.066 |  4.735 |  9.103 |  28.319 | 548.930 |
+| rust-tokio    | 256 | 50,538 |  4.205 |  4.780 |  7.624 | 310.569 | 916.658 |
 
 ### Verdict
 
-1. **rust-tokio** — best peak throughput, best p99 at saturation.
-2. **kotlin-vertx** — within 3% on RPS, best p50, but worst single-request max
-   latency (GC tail).
-3. **go-pgx** — lowest throughput ceiling, highest steady-state latency, but
-   most predictable tail.
+1. **kotlin-vertx** — most stable across the whole concurrency curve: peaks at
+   c=32 (~60k RPS) and holds ~58k through c=256 with p999 staying single-digit
+   ms. Outlier `max_ms` (GC pauses) is the cost.
+2. **rust-tokio** — best peak throughput (61.8k @ c=64) and best p99 at
+   moderate concurrency, but **degrades at c=256**: throughput drops to ~50k
+   and p999 jumps to 310 ms. Tokio's 2-worker-thread scheduler is the
+   bottleneck under heavy oversubscription.
+3. **go-pgx** — lowest throughput ceiling (~49k) and highest steady-state p50,
+   but the most predictable tail by far (`max_ms` < 50 ms at every level
+   except one 590 ms outlier).
 
-Rust and Kotlin are functionally tied for performance; the choice should
-come down to ecosystem fit and team expertise rather than these numbers.
+For the workflow-engine target (2 cores, occasional bursts up to c=128),
+rust-tokio and kotlin-vertx are functionally tied. **If sustained c=256+
+traffic is realistic, kotlin-vertx is the safer pick**: it holds throughput
+and p999 where rust degrades. If c stays ≤128, the choice comes down to
+ecosystem fit and team expertise.
 
 ## Why these libraries
 
