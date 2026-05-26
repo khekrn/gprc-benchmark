@@ -1,0 +1,17 @@
+{
+  "label": "rust-tokio",
+  "addr": "127.0.0.1:50053",
+  "concurrency": 64,
+  "connections": 4,
+  "payload_bytes": 256,
+  "duration_sec": 60.000142588,
+  "total_ok": 3708710,
+  "total_err": 0,
+  "rps": 61811.68643992089,
+  "lat_mean_ms": 1.033955050678293,
+  "lat_p50_ms": 0.993,
+  "lat_p90_ms": 1.223,
+  "lat_p99_ms": 2.756,
+  "lat_p999_ms": 5.096,
+  "lat_max_ms": 252.271
+}

@@ -19,8 +19,19 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 source ./config.sh
+# Pick up SDKMAN-installed java/mvn if the user manages JVMs that way.
+# Without this, the Kotlin server start fails with "taskset: failed to
+# execute java: No such file or directory" because the script's PATH
+# doesn't include ~/.sdkman/candidates/*/current/bin by default.
+# Toggle set -u off briefly: sdkman-init.sh references several unset vars
+# of its own and would otherwise abort the whole script.
+if [ -s "${HOME}/.sdkman/bin/sdkman-init.sh" ]; then
+  set +u
+  source "${HOME}/.sdkman/bin/sdkman-init.sh" >/dev/null 2>&1 || true
+  set -u
+fi
 
-STACKS="${STACKS:-go-pgx kotlin-vertx}"
+STACKS="${STACKS:-go-pgx kotlin-vertx rust-tokio}"
 LOADGEN="${ROOT_DIR}/bin/loadgen"
 [ -x "${LOADGEN}" ] || { echo "Build loadgen first: ./scripts/build_go.sh"; exit 1; }
 
@@ -28,7 +39,9 @@ TS="$(date +%Y%m%d-%H%M%S)"
 RUN_DIR="${RESULTS_DIR}/${TS}"
 mkdir -p "${RUN_DIR}"
 SUMMARY="${RUN_DIR}/summary.csv"
-echo "stack,concurrency,rps,p50_ms,p90_ms,p99_ms,p999_ms,max_ms,total_ok,total_err" > "${SUMMARY}"
+# Per-op (write/read) columns are appended; they're zero/0.000 when the
+# loadgen mode is not "mixed" so the CSV stays uniform across runs.
+echo "stack,concurrency,mode,rps,p50_ms,p90_ms,p99_ms,p999_ms,max_ms,total_ok,total_err,write_rps,write_p50_ms,write_p99_ms,read_rps,read_p50_ms,read_p99_ms" > "${SUMMARY}"
 
 # Record environment for reproducibility.
 {
@@ -36,8 +49,9 @@ echo "stack,concurrency,rps,p50_ms,p90_ms,p99_ms,p999_ms,max_ms,total_ok,total_e
   echo "stacks: ${STACKS}"
   echo "concurrency_levels: ${CONCURRENCY_LEVELS}"
   echo "warmup: ${WARMUP}  duration: ${DURATION}  payload: ${PAYLOAD}B  client_conns: ${CLIENT_CONNS}"
+  echo "loadgen_mode: ${LOADGEN_MODE}  read_pct: ${LOADGEN_READ_PCT}  keyspace: ${LOADGEN_KEYSPACE}"
   echo "pg_pool: min=${PG_POOL_MIN} max=${PG_POOL_MAX}"
-  echo "server_cpus: ${PIN_SERVER_CPUS}  client_cpus: ${PIN_CLIENT_CPUS}"
+  echo "server_cpus: ${PIN_SERVER_CPUS}  client_cpus: ${PIN_CLIENT_CPUS}  mem_max: ${MEM_MAX:-(unset)}"
   echo "gomaxprocs: ${GOMAXPROCS}  vertx_event_loops: ${VERTX_EVENT_LOOPS}  jvm_opts: ${JVM_OPTS}"
   echo "--- uname ---"; uname -a
   echo "--- cpu ---"; (lscpu 2>/dev/null | grep -E 'Model name|CPU\(s\)|MHz' || sysctl -n machdep.cpu.brand_string 2>/dev/null) || true
@@ -45,7 +59,14 @@ echo "stack,concurrency,rps,p50_ms,p90_ms,p99_ms,p999_ms,max_ms,total_ok,total_e
 } > "${RUN_DIR}/environment.txt"
 
 truncate_table() {
-  PGPASSWORD="${PG_PASSWORD}" psql "${DATABASE_URL}" -q -c "TRUNCATE commands RESTART IDENTITY;" >/dev/null 2>&1 || true
+  # Wipe all bench tables so each run starts from id=1 and an empty state.
+  # `|| true` because workflow_state/outbox may not exist on older DBs; the
+  # second psql with IF NOT EXISTS handles the create-on-first-run case.
+  PGPASSWORD="${PG_PASSWORD}" psql "${DATABASE_URL}" -q \
+    -c "TRUNCATE commands, workflow_state, outbox RESTART IDENTITY;" \
+    >/dev/null 2>&1 || \
+  PGPASSWORD="${PG_PASSWORD}" psql "${DATABASE_URL}" -q \
+    -c "TRUNCATE commands RESTART IDENTITY;" >/dev/null 2>&1 || true
 }
 
 wait_for_port() {
@@ -59,35 +80,79 @@ wait_for_port() {
 
 start_server() {
   local stack="$1"
+  # Each (stack, concurrency) run gets its own transient systemd --user scope
+  # so MemoryMax (and the whole process group) is isolated. SERVER_UNIT is the
+  # scope name; stop_server kills via `systemctl --user kill`, which is more
+  # reliable than `kill $!` once systemd-run is in the picture (systemd-run's
+  # own PID is what $! captures, and it doesn't forward signals to the cgroup).
+  SERVER_UNIT="bench-${stack}-c${c}-$$.scope"
+  local memcap=()
+  if [ -n "${MEM_MAX:-}" ] && command -v systemd-run >/dev/null 2>&1; then
+    memcap=(systemd-run --user --scope --quiet
+      --unit="${SERVER_UNIT%.scope}"
+      -p MemoryMax="${MEM_MAX}" -p MemorySwapMax=0 -p TasksMax=infinity)
+  else
+    SERVER_UNIT=""
+  fi
+
   # Append (>>) so we keep the log from every concurrency level in the sweep
   # — overwriting (>) made debugging stale-server bugs much harder.
-  # `${SERVER_PIN[@]+"${SERVER_PIN[@]}"}` expands to the array contents if
-  # set+non-empty, otherwise to nothing — needed because `set -u` rejects
-  # `${SERVER_PIN[@]}` outright when the array is empty (macOS, no taskset).
-  if [ "${stack}" = "go-pgx" ]; then
-    LISTEN_ADDR="${GO_ADDR}" \
-      ${SERVER_PIN[@]+"${SERVER_PIN[@]}"} "${ROOT_DIR}/bin/go-server" \
-      >> "${RUN_DIR}/${stack}.server.log" 2>&1 &
-    SERVER_PID=$!
-    wait_for_port "${GO_ADDR%%:*}" "${GO_ADDR##*:}"
-    TARGET_ADDR="${GO_ADDR}"
-  else
-    # shellcheck disable=SC2086
-    LISTEN_HOST="${KOTLIN_HOST}" LISTEN_PORT="${KOTLIN_PORT}" \
-      ${SERVER_PIN[@]+"${SERVER_PIN[@]}"} java ${JVM_OPTS} -jar "${ROOT_DIR}/bin/kotlin-vertx-bench.jar" \
-      >> "${RUN_DIR}/${stack}.server.log" 2>&1 &
-    SERVER_PID=$!
-    wait_for_port "${KOTLIN_HOST}" "${KOTLIN_PORT}"
-    TARGET_ADDR="${KOTLIN_ADDR}"
-  fi
+  # `${ARR[@]+"${ARR[@]}"}` expands to the array contents if set+non-empty,
+  # otherwise to nothing — needed because `set -u` rejects `${ARR[@]}` when
+  # the array is empty.
+  case "${stack}" in
+    go-pgx)
+      LISTEN_ADDR="${GO_ADDR}" \
+        ${memcap[@]+"${memcap[@]}"} \
+        ${SERVER_PIN[@]+"${SERVER_PIN[@]}"} "${ROOT_DIR}/bin/go-server" \
+        >> "${RUN_DIR}/${stack}.server.log" 2>&1 &
+      SERVER_PID=$!
+      wait_for_port "${GO_ADDR%%:*}" "${GO_ADDR##*:}"
+      TARGET_ADDR="${GO_ADDR}"
+      ;;
+    kotlin-vertx)
+      # shellcheck disable=SC2086
+      LISTEN_HOST="${KOTLIN_HOST}" LISTEN_PORT="${KOTLIN_PORT}" \
+        ${memcap[@]+"${memcap[@]}"} \
+        ${SERVER_PIN[@]+"${SERVER_PIN[@]}"} java ${JVM_OPTS} -jar "${ROOT_DIR}/bin/kotlin-vertx-bench.jar" \
+        >> "${RUN_DIR}/${stack}.server.log" 2>&1 &
+      SERVER_PID=$!
+      wait_for_port "${KOTLIN_HOST}" "${KOTLIN_PORT}"
+      TARGET_ADDR="${KOTLIN_ADDR}"
+      ;;
+    rust-tokio)
+      LISTEN_ADDR="${RUST_ADDR}" RUST_WORKER_THREADS="${RUST_WORKER_THREADS}" \
+        ${memcap[@]+"${memcap[@]}"} \
+        ${SERVER_PIN[@]+"${SERVER_PIN[@]}"} "${ROOT_DIR}/bin/rust-server" \
+        >> "${RUN_DIR}/${stack}.server.log" 2>&1 &
+      SERVER_PID=$!
+      wait_for_port "${RUST_ADDR%%:*}" "${RUST_ADDR##*:}"
+      TARGET_ADDR="${RUST_ADDR}"
+      ;;
+    *)
+      echo "unknown stack: ${stack}" >&2
+      return 1
+      ;;
+  esac
 }
 
 stop_server() {
+  # When a systemd scope wraps the server, `systemctl --user kill` reaches
+  # every process in the cgroup — kill $! only hits systemd-run itself.
+  if [ -n "${SERVER_UNIT:-}" ] && systemctl --user is-active --quiet "${SERVER_UNIT}" 2>/dev/null; then
+    systemctl --user kill --signal=TERM "${SERVER_UNIT}" 2>/dev/null || true
+    for _ in $(seq 1 30); do
+      systemctl --user is-active --quiet "${SERVER_UNIT}" 2>/dev/null || break
+      sleep 0.5
+    done
+    if systemctl --user is-active --quiet "${SERVER_UNIT}" 2>/dev/null; then
+      echo "WARN: scope ${SERVER_UNIT} did not exit on SIGTERM, forcing stop" >&2
+      systemctl --user stop "${SERVER_UNIT}" 2>/dev/null || true
+    fi
+  fi
+  # Fallback path (MEM_MAX unset, or systemd-run absent): direct PID kill.
   if [ -n "${SERVER_PID:-}" ] && kill -0 "${SERVER_PID}" 2>/dev/null; then
     kill -TERM "${SERVER_PID}" 2>/dev/null || true
-    # Wait up to 10s for graceful shutdown; if it overruns (a wedged drain,
-    # for instance) escalate to SIGKILL so we never carry a stale server
-    # into the next concurrency level.
     for _ in $(seq 1 20); do
       kill -0 "${SERVER_PID}" 2>/dev/null || break
       sleep 0.5
@@ -99,6 +164,7 @@ stop_server() {
     wait "${SERVER_PID}" 2>/dev/null || true
   fi
   SERVER_PID=""
+  SERVER_UNIT=""
 }
 trap stop_server EXIT
 
@@ -121,6 +187,9 @@ for stack in ${STACKS}; do
       -warmup "${WARMUP}" \
       -payload "${PAYLOAD}" \
       -conns "${CLIENT_CONNS}" \
+      -mode "${LOADGEN_MODE}" \
+      -read-pct "${LOADGEN_READ_PCT}" \
+      -keyspace "${LOADGEN_KEYSPACE}" \
       -label "${stack}" \
       -out "${OUT_JSON}" \
       > "${RUN_DIR}/${stack}-c${c}.stdout" 2> "${RUN_DIR}/${stack}-c${c}.stderr" || true
@@ -134,9 +203,14 @@ import json, sys
 path, stack, c = sys.argv[1], sys.argv[2], sys.argv[3]
 with open(path) as f:
     r = json.load(f)
-print("{},{},{:.0f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{},{}".format(
-    stack, c, r["rps"], r["lat_p50_ms"], r["lat_p90_ms"], r["lat_p99_ms"],
-    r["lat_p999_ms"], r["lat_max_ms"], r["total_ok"], r["total_err"]))
+# Per-op fields are missing on older JSON outputs; default to 0.
+def g(key, default=0): return r.get(key, default)
+print("{},{},{},{:.0f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{},{},{:.0f},{:.3f},{:.3f},{:.0f},{:.3f},{:.3f}".format(
+    stack, c, g("mode", "execute"),
+    r["rps"], r["lat_p50_ms"], r["lat_p90_ms"], r["lat_p99_ms"],
+    r["lat_p999_ms"], r["lat_max_ms"], r["total_ok"], r["total_err"],
+    g("write_rps"), g("write_p50_ms"), g("write_p99_ms"),
+    g("read_rps"),  g("read_p50_ms"),  g("read_p99_ms")))
 PY
     fi
   done

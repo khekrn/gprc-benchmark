@@ -1,0 +1,17 @@
+{
+  "label": "kotlin-vertx",
+  "addr": "127.0.0.1:50052",
+  "concurrency": 32,
+  "connections": 4,
+  "payload_bytes": 256,
+  "duration_sec": 60.000202835,
+  "total_ok": 3256136,
+  "total_err": 0,
+  "rps": 54268.74987330199,
+  "lat_mean_ms": 0.5881016348825506,
+  "lat_p50_ms": 0.506,
+  "lat_p90_ms": 0.868,
+  "lat_p99_ms": 1.97,
+  "lat_p999_ms": 4.179,
+  "lat_max_ms": 24.52
+}

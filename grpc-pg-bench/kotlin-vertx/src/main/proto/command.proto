@@ -7,18 +7,24 @@ option java_multiple_files = true;
 option java_package = "com.beam.bench.proto";
 option java_outer_classname = "CommandProto";
 
-// CommandService models the minimal hot path of a workflow engine:
-// receive a command, do a tiny amount of CPU work, persist it, return the id.
+// CommandService models the hot paths of a workflow engine:
+//   Execute    — receive a command, log it (single INSERT, autocommit).
+//   ExecuteTx  — same plus advance workflow state and queue outbox event
+//                in one atomic 3-statement transaction. Closer to what a
+//                real workflow engine writes per command.
+//   GetState   — read the current state of one workflow (the dominant read
+//                shape: lookup by workflow_id).
 service CommandService {
-  // Execute unmarshals the request, performs small processing, inserts one
-  // row into Postgres, and returns the generated id.
-  rpc Execute(CommandRequest) returns (CommandResponse);
+  rpc Execute   (CommandRequest)  returns (CommandResponse);
+  rpc ExecuteTx (CommandRequest)  returns (CommandResponse);
+  rpc GetState  (GetStateRequest) returns (StateResponse);
 }
 
 message CommandRequest {
   // Logical workflow this command belongs to.
   string workflow_id = 1;
-  // Command type/name, e.g. "approve", "reject".
+  // Command type/name, e.g. "approve", "reject". In ExecuteTx this also
+  // becomes the new workflow state (UPSERT) and the outbox event type.
   string command_type = 2;
   // Opaque JSON-ish payload that gets stored as-is.
   string payload = 3;
@@ -27,10 +33,25 @@ message CommandRequest {
 }
 
 message CommandResponse {
-  // Database-generated primary key of the inserted row.
+  // Database-generated primary key of the inserted commands row.
   int64 id = 1;
   // Server-computed checksum of the payload (the "small processing").
   uint32 checksum = 2;
   // Server receive timestamp in unix micros.
   int64 received_at_micros = 3;
+}
+
+message GetStateRequest {
+  string workflow_id = 1;
+}
+
+message StateResponse {
+  // False if no row exists for this workflow_id.
+  bool   found = 1;
+  string workflow_id = 2;
+  string state = 3;
+  // Monotonically incremented on each UPSERT in ExecuteTx.
+  int64  version = 4;
+  // Last update timestamp in unix micros.
+  int64  updated_at_micros = 5;
 }

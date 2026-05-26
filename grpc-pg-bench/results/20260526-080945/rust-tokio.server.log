@@ -1,0 +1,4 @@
+[2m2026-05-26T02:42:21.391469Z[0m [32m INFO[0m [2mrust_tokio_bench[0m[2m:[0m rust-tokio (axum) server listening [3maddr[0m[2m=[0m127.0.0.1:50053 [3mpool_min[0m[2m=[0m4 [3mpool_max[0m[2m=[0m16 [3mworkers[0m[2m=[0m2
+[2m2026-05-26T02:42:21.859066Z[0m [33m WARN[0m [2mrust_tokio_bench[0m[2m:[0m h2 connection error [3merr[0m[2m=[0mconnection error
+[2m2026-05-26T02:43:38.124805Z[0m [32m INFO[0m [2mrust_tokio_bench[0m[2m:[0m shutdown signal received, draining in-flight RPCs
+[2m2026-05-26T02:43:38.124829Z[0m [32m INFO[0m [2mrust_tokio_bench[0m[2m:[0m graceful stop complete

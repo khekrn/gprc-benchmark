@@ -1,0 +1,15 @@
+time=2026-05-25T20:04:39.631+05:30 level=INFO msg="go-pgx server listening" addr=127.0.0.1:50051 pool_min=4 pool_max=16 gomaxprocs=2
+time=2026-05-25T20:05:56.162+05:30 level=INFO msg="shutdown signal received, draining in-flight RPCs"
+time=2026-05-25T20:05:56.162+05:30 level=INFO msg="graceful stop complete"
+time=2026-05-25T20:05:56.211+05:30 level=INFO msg="go-pgx server listening" addr=127.0.0.1:50051 pool_min=4 pool_max=16 gomaxprocs=2
+time=2026-05-25T20:07:12.784+05:30 level=INFO msg="shutdown signal received, draining in-flight RPCs"
+time=2026-05-25T20:07:12.784+05:30 level=INFO msg="graceful stop complete"
+time=2026-05-25T20:07:12.827+05:30 level=INFO msg="go-pgx server listening" addr=127.0.0.1:50051 pool_min=4 pool_max=16 gomaxprocs=2
+time=2026-05-25T20:08:29.450+05:30 level=INFO msg="shutdown signal received, draining in-flight RPCs"
+time=2026-05-25T20:08:29.451+05:30 level=INFO msg="graceful stop complete"
+time=2026-05-25T20:08:29.503+05:30 level=INFO msg="go-pgx server listening" addr=127.0.0.1:50051 pool_min=4 pool_max=16 gomaxprocs=2
+time=2026-05-25T20:09:47.126+05:30 level=INFO msg="shutdown signal received, draining in-flight RPCs"
+time=2026-05-25T20:09:47.127+05:30 level=INFO msg="graceful stop complete"
+time=2026-05-25T20:09:47.174+05:30 level=INFO msg="go-pgx server listening" addr=127.0.0.1:50051 pool_min=4 pool_max=16 gomaxprocs=2
+time=2026-05-25T20:11:03.816+05:30 level=INFO msg="shutdown signal received, draining in-flight RPCs"
+time=2026-05-25T20:11:03.816+05:30 level=INFO msg="graceful stop complete"

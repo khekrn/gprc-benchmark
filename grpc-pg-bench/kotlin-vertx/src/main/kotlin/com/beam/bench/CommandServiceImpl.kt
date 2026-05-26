@@ -3,6 +3,8 @@ package com.beam.bench
 import com.beam.bench.proto.CommandRequest
 import com.beam.bench.proto.CommandResponse
 import com.beam.bench.proto.CommandServiceGrpcService
+import com.beam.bench.proto.GetStateRequest
+import com.beam.bench.proto.StateResponse
 import io.vertx.core.Future
 import io.vertx.kotlin.coroutines.vertxFuture
 import kotlinx.coroutines.CoroutineScope
@@ -49,6 +51,36 @@ class CommandServiceImpl(
             .setId(id)
             .setChecksum(checksum)
             .setReceivedAtMicros(recvMicros)
+            .build()
+    }
+
+    override fun executeTx(request: CommandRequest): Future<CommandResponse> = vertxFuture(scope) {
+        val checksum = fnv1a32(request.payload.toByteArray(StandardCharsets.UTF_8))
+        val recvMicros = nowMicros()
+
+        val id = db.executeTx(
+            workflowId = request.workflowId,
+            commandType = request.commandType,
+            payload = request.payload,
+            seq = request.seq,
+            checksum = checksum.toLong() and 0xffffffffL,
+        )
+
+        CommandResponse.newBuilder()
+            .setId(id)
+            .setChecksum(checksum)
+            .setReceivedAtMicros(recvMicros)
+            .build()
+    }
+
+    override fun getState(request: GetStateRequest): Future<StateResponse> = vertxFuture(scope) {
+        val row = db.getState(request.workflowId)
+        StateResponse.newBuilder()
+            .setFound(row.found)
+            .setWorkflowId(if (row.found) row.workflowId else request.workflowId)
+            .setState(row.state)
+            .setVersion(row.version)
+            .setUpdatedAtMicros(row.updatedAtMicros)
             .build()
     }
 

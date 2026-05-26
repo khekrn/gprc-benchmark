@@ -1,0 +1,3 @@
+time=2026-05-26T08:09:45.808+05:30 level=INFO msg="go-pgx server listening" addr=127.0.0.1:50051 pool_min=4 pool_max=16 gomaxprocs=2
+time=2026-05-26T08:11:02.514+05:30 level=INFO msg="shutdown signal received, draining in-flight RPCs"
+time=2026-05-26T08:11:02.514+05:30 level=INFO msg="graceful stop complete"
