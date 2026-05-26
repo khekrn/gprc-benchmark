@@ -1,0 +1,13 @@
+2025/10/05 21:24:14 Loaded worker config: Name=loan_approval_worker_2 Endpoint=localhost:9192
+2025/10/05 21:24:14 Server endpoints: 2 servers with round_robin load balancing
+2025/10/05 21:24:14 Starting workflow worker: loan_approval_worker_2
+2025/10/05 21:24:14 Connected to Redis at localhost:6379
+2025/10/05 21:24:14 Registered workflow: loan_approval
+2025/10/05 21:24:14 Registered workflows: [loan_approval]
+2025/10/05 21:24:14 Worker gRPC server listening on port 9192
+2025/10/05 21:24:14 Worker registered and online event published: loan_approval_worker_2 at localhost:9192
+2025/10/05 21:24:14 Worker registered with Redis and ready for connections from workflow servers
+2025/10/05 21:24:14 Warning: Failed to register workflows with server: failed to register workflow loan_approval: Post "http://localhost:8080/api/v1/workflows/endpoints": dial tcp [::1]:8080: connect: connection refused
+2025/10/05 21:24:14 Worker started successfully. Waiting for workflow server connections...
+2025/10/05 21:25:05 Shutting down worker...
+2025/10/05 21:25:05 Worker unregistered and offline event published: loan_approval_worker_2

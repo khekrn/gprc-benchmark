@@ -1,0 +1,25 @@
+server:
+  http:
+    port: 8081
+  grpc:
+    port: 9091
+  name: "workflow-engine-2"
+
+database:
+  host: "localhost"
+  port: 5432
+  user: "postgres"
+  password: "sam"
+  dbname: "workflow_engine"
+  sslmode: "disable"
+
+redis:
+  host: "localhost"
+  port: 6379
+  password: ""
+  db: 0
+  worker_registry_key: "workflow:workers"
+  worker_events_channel: "workflow:worker_events"
+
+logging:
+  level: "info"

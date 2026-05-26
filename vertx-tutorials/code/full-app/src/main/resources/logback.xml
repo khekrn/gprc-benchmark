@@ -1,0 +1,28 @@
+<configuration scan="false">
+    <!-- JSON output for production (parsable by Loki/ELK). Toggle via SPRING_PROFILES_ACTIVE-like env. -->
+    <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <includeMdcKeyName>traceId</includeMdcKeyName>
+            <includeMdcKeyName>spanId</includeMdcKeyName>
+            <includeMdcKeyName>requestId</includeMdcKeyName>
+            <includeMdcKeyName>userId</includeMdcKeyName>
+        </encoder>
+    </appender>
+
+    <!-- Async wrapper: non-blocking handoff to a ring buffer. Drops on overflow rather than block. -->
+    <appender name="ASYNC" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>8192</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <neverBlock>true</neverBlock>
+        <appender-ref ref="JSON"/>
+    </appender>
+
+    <!-- Quieter defaults — Vert.x and Netty are chatty at INFO during startup. -->
+    <logger name="io.netty"  level="WARN"/>
+    <logger name="io.vertx"  level="INFO"/>
+    <logger name="com.example" level="DEBUG"/>
+
+    <root level="INFO">
+        <appender-ref ref="ASYNC"/>
+    </root>
+</configuration>

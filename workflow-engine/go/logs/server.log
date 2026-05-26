@@ -1,0 +1,72 @@
+2025/10/05 21:06:18 Loaded config: Server=workflow-engine-1 HTTP=:8080 gRPC=:9090
+2025/10/05 21:06:18 Loaded config: Server=workflow-engine-1 HTTP=:8080 gRPC=:9090
+2025/10/05 21:06:18 Connected to database successfully
+2025/10/05 21:06:18 Connected to Redis at localhost:6379
+2025/10/05 21:06:18 Connected to Redis at localhost:6379
+2025/10/05 21:06:18 Connected to Redis successfully
+2025/10/05 21:06:18 Worker pool manager initialized and monitoring for workers
+[GIN-debug] [WARNING] Creating an Engine instance with the Logger and Recovery middleware already attached.
+
+[GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
+ - using env:	export GIN_MODE=release
+ - using code:	gin.SetMode(gin.ReleaseMode)
+
+[GIN-debug] POST   /api/v1/workflows/start   --> workflow-engine/internal/handlers.(*HTTPHandler).StartWorkflow-fm (3 handlers)
+[GIN-debug] POST   /api/v1/workflows/start-sync --> workflow-engine/internal/handlers.(*HTTPHandler).StartWorkflowSync-fm (3 handlers)
+[GIN-debug] GET    /api/v1/workflows/:id     --> workflow-engine/internal/handlers.(*HTTPHandler).GetWorkflow-fm (3 handlers)
+[GIN-debug] POST   /api/v1/workflows/endpoints --> workflow-engine/internal/handlers.(*HTTPHandler).RegisterWorkflowEndpoints-fm (3 handlers)
+[GIN-debug] GET    /api/v1/workflows/mappings --> workflow-engine/internal/handlers.(*HTTPHandler).GetWorkflowMappings-fm (3 handlers)
+[GIN-debug] GET    /api/v1/connections       --> workflow-engine/internal/handlers.(*HTTPHandler).GetConnections-fm (3 handlers)
+[GIN-debug] GET    /api/v1/metrics           --> workflow-engine/internal/handlers.(*HTTPHandler).GetMetrics-fm (3 handlers)
+[GIN-debug] GET    /health                   --> workflow-engine/internal/handlers.(*HTTPHandler).Health-fm (3 handlers)
+2025/10/05 21:06:18 Starting HTTP server on port 8080
+2025/10/05 21:06:18 Server name: workflow-engine-1
+2025/10/05 21:06:18 Server started successfully!
+2025/10/05 21:06:18 New Architecture:
+2025/10/05 21:06:18 - Workers register themselves in Redis when they start
+2025/10/05 21:06:18 - Server discovers workers via Redis pub/sub
+2025/10/05 21:06:18 - Server establishes connections TO workers (reverse of old pattern)
+2025/10/05 21:06:18 - Multiple servers can run - workers are distributed via Redis
+[GIN-debug] [WARNING] You trusted all proxies, this is NOT safe. We recommend you to set a value.
+Please check https://pkg.go.dev/github.com/gin-gonic/gin#readme-don-t-trust-all-proxies for details.
+[GIN-debug] Listening and serving HTTP on :8080
+2025/10/05 21:07:31 Executing workflow loan_approval (ID: 76) synchronously with request ID: 2b1dd135-71c3-429a-bc48-347c25436a9a
+2025/10/05 21:07:31 Found 3 workers for workflow loan_approval: [{loan_approval_worker localhost:9191 online 2025-10-05 21:07:20.705734 +0530 IST [loan_approval] 64 map[port:9191]} {loan_approval_worker_3 localhost:9193 online 2025-10-05 21:07:09.749757 +0530 IST [loan_approval] 64 map[port:9193]} {loan_approval_worker_2 localhost:9192 online 2025-10-05 21:07:31.43356 +0530 IST [loan_approval] 64 map[port:9192]}]
+2025/10/05 21:07:31 Creating new worker pool for workflow: loan_approval
+2025/10/05 21:07:31 Creating worker pool with config: workflow_filter=loan_approval, min_workers=1, max_workers=64
+2025/10/05 21:07:31 === DEBUG: Looking for workers for workflow 'loan_approval' ===
+2025/10/05 21:07:31 Pool config: filter='loan_approval', max_workers=64
+2025/10/05 21:07:31 Total workers in pool: 0
+2025/10/05 21:07:31 Connected workers: 0, Compatible workers: 0
+2025/10/05 21:07:31 Starting worker event monitoring for pool (filter: loan_approval)
+2025/10/05 21:07:31 Found 3 existing workers in Redis
+2025/10/05 21:07:31 Connecting to existing worker: loan_approval_worker_2 at localhost:9192
+2025/10/05 21:07:31 Establishing gRPC connection to worker loan_approval_worker_2 at localhost:9192
+[GIN] 2025/10/05 - 21:07:31 | 500 |    9.217917ms |             ::1 | POST     "/api/v1/workflows/start-sync"
+2025/10/05 21:07:32 Successfully connected to worker loan_approval_worker_2 (capacity: 10, workflows: [loan_approval])
+2025/10/05 21:07:32 Connecting to existing worker: loan_approval_worker at localhost:9191
+2025/10/05 21:07:32 Establishing gRPC connection to worker loan_approval_worker at localhost:9191
+2025/10/05 21:07:32 Successfully connected to worker loan_approval_worker (capacity: 10, workflows: [loan_approval])
+2025/10/05 21:07:32 Connecting to existing worker: loan_approval_worker_3 at localhost:9193
+2025/10/05 21:07:32 Establishing gRPC connection to worker loan_approval_worker_3 at localhost:9193
+2025/10/05 21:07:32 Successfully connected to worker loan_approval_worker_3 (capacity: 10, workflows: [loan_approval])
+2025/10/05 21:11:08 Worker went offline: loan_approval_worker
+2025/10/05 21:11:08 Error receiving from worker loan_approval_worker: rpc error: code = Canceled desc = context canceled
+2025/10/05 21:11:08 Disconnected worker: loan_approval_worker
+2025/10/05 21:11:08 Worker went offline: loan_approval_worker_3
+2025/10/05 21:11:08 Error receiving from worker loan_approval_worker_3: rpc error: code = Canceled desc = context canceled
+2025/10/05 21:11:08 Disconnected worker: loan_approval_worker_3
+2025/10/05 21:11:08 Worker went offline: loan_approval_worker_2
+2025/10/05 21:11:08 Error receiving from worker loan_approval_worker_2: rpc error: code = Canceled desc = context canceled
+2025/10/05 21:11:08 Disconnected worker: loan_approval_worker_2
+2025/10/05 21:11:17 Worker came online: loan_approval_worker at localhost:9191
+2025/10/05 21:11:17 Establishing gRPC connection to worker loan_approval_worker at localhost:9191
+Endpoint already exists for workflow loan_approval: localhost:9191
+2025/10/05 21:11:17 Registering endpoints for workflow loan_approval: [localhost:9191]
+[GIN] 2025/10/05 - 21:11:17 | 200 |      5.6895ms |             ::1 | POST     "/api/v1/workflows/endpoints"
+2025/10/05 21:11:17 Successfully connected to worker loan_approval_worker (capacity: 10, workflows: [loan_approval])
+2025/10/05 21:11:40 Worker came online: loan_approval_worker_2 at localhost:9192
+2025/10/05 21:11:40 Establishing gRPC connection to worker loan_approval_worker_2 at localhost:9192
+Endpoint already exists for workflow loan_approval: localhost:9191
+2025/10/05 21:11:40 Registering endpoints for workflow loan_approval: [localhost:9192]
+[GIN] 2025/10/05 - 21:11:40 | 200 |    3.655667ms |             ::1 | POST     "/api/v1/workflows/endpoints"

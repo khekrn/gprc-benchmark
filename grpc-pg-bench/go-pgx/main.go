@@ -24,7 +24,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"hash/fnv"
 	"log/slog"
 	"net"
 	"os"
@@ -43,6 +42,13 @@ import (
 	"google.golang.org/grpc/keepalive"
 )
 
+// FNV-1a 32-bit constants. Inlined to avoid the per-call hash.Hash32
+// interface allocation that hash/fnv.New32a forces.
+const (
+	fnvOffset32 uint32 = 2166136261
+	fnvPrime32  uint32 = 16777619
+)
+
 const insertSQL = `
 INSERT INTO commands (workflow_id, command_type, payload, seq, checksum)
 VALUES ($1, $2, $3, $4, $5)
@@ -55,18 +61,23 @@ type server struct {
 
 // Execute is the hot path. Keep allocations and indirection minimal.
 func (s *server) Execute(ctx context.Context, req *benchv1.CommandRequest) (*benchv1.CommandResponse, error) {
-	// "Small processing": FNV-1a over the payload bytes.
-	h := fnv.New32a()
-	_, _ = h.Write([]byte(req.Payload))
-	checksum := h.Sum32()
-
 	recv := time.Now().UnixMicro()
+
+	// "Small processing": FNV-1a over the payload bytes. Inlined over the
+	// string to skip both the hash.Hash32 interface alloc and the
+	// []byte(req.Payload) copy that hash/fnv would force.
+	payload := req.Payload
+	checksum := fnvOffset32
+	for i := 0; i < len(payload); i++ {
+		checksum ^= uint32(payload[i])
+		checksum *= fnvPrime32
+	}
 
 	var id int64
 	err := s.pool.QueryRow(ctx, insertSQL,
 		req.WorkflowId,
 		req.CommandType,
-		req.Payload,
+		payload,
 		req.Seq,
 		int64(checksum),
 	).Scan(&id)
@@ -172,6 +183,24 @@ func run() error {
 			MinTime:             10 * time.Second,
 			PermitWithoutStream: true,
 		}),
+		// HTTP/2 flow-control windows. Defaults (64 KiB stream / 64 KiB conn)
+		// throttle short-RPC throughput at high concurrency because the
+		// client has to wait for WINDOW_UPDATE frames between batches. 1 MiB
+		// each removes flow-control as a serializer for the benchmark.
+		grpc.InitialWindowSize(1<<20),
+		grpc.InitialConnWindowSize(1<<20),
+		// Larger transport read/write buffers reduce the number of
+		// syscalls per stream under load.
+		grpc.ReadBufferSize(64<<10),
+		grpc.WriteBufferSize(64<<10),
+		// Share the per-stream write buffer across active streams on the
+		// same connection — lowers per-call allocation overhead.
+		grpc.SharedWriteBuffer(true),
+		// Bounded pool of stream workers. Default (0) spawns a fresh
+		// goroutine per stream; pinning a small pool amortizes goroutine
+		// setup over the lifetime of the benchmark. Sized at 4x GOMAXPROCS
+		// so PG-blocked workers don't head-of-line block CPU-ready ones.
+		grpc.NumStreamWorkers(uint32(runtime.GOMAXPROCS(0))*4),
 	)
 	benchv1.RegisterCommandServiceServer(grpcServer, &server{pool: pool})
 

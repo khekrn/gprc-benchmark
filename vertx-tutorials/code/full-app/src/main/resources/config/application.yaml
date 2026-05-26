@@ -1,0 +1,14 @@
+# Defaults. Override with env vars in containers.
+APP_HTTP_PORT: 8080
+APP_GRPC_PORT: 9090
+
+APP_PG_HOST: localhost
+APP_PG_PORT: 5432
+APP_PG_DB: app
+APP_PG_USER: app
+APP_PG_PASSWORD: app
+APP_PG_POOL_MAX: 16
+APP_PG_PIPELINING: 256
+
+APP_REDIS_URI: redis://localhost:6379
+APP_REDIS_POOL_MAX: 16

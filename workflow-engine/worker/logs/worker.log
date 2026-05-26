@@ -1,0 +1,14 @@
+2025/10/05 21:11:17 Loaded worker config: Name=loan_approval_worker Endpoint=localhost:9191
+2025/10/05 21:11:17 Server endpoints: 3 servers with round_robin load balancing
+2025/10/05 21:11:17 Starting workflow worker: loan_approval_worker
+2025/10/05 21:11:17 Connected to Redis at localhost:6379
+2025/10/05 21:11:17 Registered workflow: loan_approval
+2025/10/05 21:11:17 Registered workflows: [loan_approval]
+2025/10/05 21:11:17 Worker gRPC server listening on port 9191
+2025/10/05 21:11:17 Worker registered and online event published: loan_approval_worker at localhost:9191
+2025/10/05 21:11:17 Worker registered with Redis and ready for connections from workflow servers
+2025/10/05 21:11:17 Successfully registered workflow loan_approval with server at localhost:8080
+2025/10/05 21:11:17 Successfully registered all workflows with server at localhost:8080
+2025/10/05 21:11:17 Worker started successfully. Waiting for workflow server connections...
+2025/10/05 21:11:17 New stream established: stream_0
+2025/10/05 21:11:17 New stream established: stream_1

@@ -1,0 +1,111 @@
+2025/10/05 21:01:27 Loaded config: Server=workflow-engine-1 HTTP=:8080 gRPC=:9090
+2025/10/05 21:01:27 Loaded config: Server=workflow-engine-1 HTTP=:8080 gRPC=:9090
+2025/10/05 21:01:27 Connected to database successfully
+2025/10/05 21:01:27 Connected to Redis at localhost:6379
+2025/10/05 21:01:27 Connected to Redis at localhost:6379
+2025/10/05 21:01:27 Connected to Redis successfully
+2025/10/05 21:01:27 Worker pool manager initialized and monitoring for workers
+[GIN-debug] [WARNING] Creating an Engine instance with the Logger and Recovery middleware already attached.
+
+[GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
+ - using env:	export GIN_MODE=release
+ - using code:	gin.SetMode(gin.ReleaseMode)
+
+[GIN-debug] POST   /api/v1/workflows/start   --> workflow-engine/internal/handlers.(*HTTPHandler).StartWorkflow-fm (3 handlers)
+[GIN-debug] POST   /api/v1/workflows/start-sync --> workflow-engine/internal/handlers.(*HTTPHandler).StartWorkflowSync-fm (3 handlers)
+[GIN-debug] GET    /api/v1/workflows/:id     --> workflow-engine/internal/handlers.(*HTTPHandler).GetWorkflow-fm (3 handlers)
+[GIN-debug] POST   /api/v1/workflows/endpoints --> workflow-engine/internal/handlers.(*HTTPHandler).RegisterWorkflowEndpoints-fm (3 handlers)
+[GIN-debug] GET    /api/v1/workflows/mappings --> workflow-engine/internal/handlers.(*HTTPHandler).GetWorkflowMappings-fm (3 handlers)
+[GIN-debug] GET    /api/v1/connections       --> workflow-engine/internal/handlers.(*HTTPHandler).GetConnections-fm (3 handlers)
+[GIN-debug] GET    /api/v1/metrics           --> workflow-engine/internal/handlers.(*HTTPHandler).GetMetrics-fm (3 handlers)
+[GIN-debug] GET    /health                   --> workflow-engine/internal/handlers.(*HTTPHandler).Health-fm (3 handlers)
+2025/10/05 21:01:27 Starting HTTP server on port 8080
+2025/10/05 21:01:27 Server name: workflow-engine-1
+2025/10/05 21:01:27 Server started successfully!
+2025/10/05 21:01:27 New Architecture:
+2025/10/05 21:01:27 - Workers register themselves in Redis when they start
+2025/10/05 21:01:27 - Server discovers workers via Redis pub/sub
+2025/10/05 21:01:27 - Server establishes connections TO workers (reverse of old pattern)
+2025/10/05 21:01:27 - Multiple servers can run - workers are distributed via Redis
+[GIN-debug] [WARNING] You trusted all proxies, this is NOT safe. We recommend you to set a value.
+Please check https://pkg.go.dev/github.com/gin-gonic/gin#readme-don-t-trust-all-proxies for details.
+[GIN-debug] Listening and serving HTTP on :8080
+Endpoint already exists for workflow loan_approval: localhost:9191
+2025/10/05 21:01:43 Registering endpoints for workflow loan_approval: [localhost:9191]
+[GIN] 2025/10/05 - 21:01:43 | 200 |    8.284125ms |             ::1 | POST     "/api/v1/workflows/endpoints"
+Endpoint already exists for workflow loan_approval: localhost:9191
+2025/10/05 21:01:44 Registering endpoints for workflow loan_approval: [localhost:9192]
+[GIN] 2025/10/05 - 21:01:44 | 200 |         932µs |             ::1 | POST     "/api/v1/workflows/endpoints"
+Endpoint already exists for workflow loan_approval: localhost:9191
+2025/10/05 21:01:46 Registering endpoints for workflow loan_approval: [localhost:9193]
+[GIN] 2025/10/05 - 21:01:46 | 200 |     828.542µs |             ::1 | POST     "/api/v1/workflows/endpoints"
+[GIN] 2025/10/05 - 21:03:13 | 400 |     226.416µs |             ::1 | POST     "/api/v1/workflows/start-sync"
+Endpoint already exists for workflow loan_approval: localhost:9191
+2025/10/05 21:04:50 Registering endpoints for workflow loan_approval: [localhost:9191]
+[GIN] 2025/10/05 - 21:04:50 | 200 |    5.841292ms |             ::1 | POST     "/api/v1/workflows/endpoints"
+Endpoint already exists for workflow loan_approval: localhost:9191
+2025/10/05 21:05:01 Registering endpoints for workflow loan_approval: [localhost:9192]
+[GIN] 2025/10/05 - 21:05:01 | 200 |   12.066833ms |             ::1 | POST     "/api/v1/workflows/endpoints"
+Endpoint already exists for workflow loan_approval: localhost:9191
+2025/10/05 21:05:09 Registering endpoints for workflow loan_approval: [localhost:9193]
+[GIN] 2025/10/05 - 21:05:09 | 200 |    5.860291ms |             ::1 | POST     "/api/v1/workflows/endpoints"
+[GIN] 2025/10/05 - 21:05:40 | 200 |     548.833µs |             ::1 | GET      "/health"
+[GIN] 2025/10/05 - 21:05:40 | 200 |     119.958µs |             ::1 | GET      "/api/v1/connections"
+[GIN] 2025/10/05 - 21:05:40 | 200 |     162.167µs |             ::1 | GET      "/api/v1/workflows/mappings"
+[GIN] 2025/10/05 - 21:05:40 | 200 |     148.958µs |             ::1 | GET      "/api/v1/metrics"
+Endpoint already exists for workflow loan_approval: localhost:9191
+2025/10/05 21:05:40 Registering endpoints for workflow loan_approval: [http://localhost:9191]
+[GIN] 2025/10/05 - 21:05:40 | 200 |     945.709µs |             ::1 | POST     "/api/v1/workflows/endpoints"
+2025/10/05 21:05:40 Executing workflow loan_approval (ID: 72) with request ID: b369ff0a-206f-4624-a733-ac9eb2ac9fad
+2025/10/05 21:05:40 Found 3 workers for workflow loan_approval: [{loan_approval_worker_2 localhost:9192 online 2025-10-05 21:05:31.436878 +0530 IST [loan_approval] 64 map[port:9192]} {loan_approval_worker localhost:9191 online 2025-10-05 21:05:20.707222 +0530 IST [loan_approval] 64 map[port:9191]} {loan_approval_worker_3 localhost:9193 online 2025-10-05 21:05:39.752771 +0530 IST [loan_approval] 64 map[port:9193]}]
+2025/10/05 21:05:40 Executing workflow loan_approval (ID: 72) with 3 workers
+2025/10/05 21:05:40 Connecting to worker loan_approval_worker_3 at localhost:9193
+2025/10/05 21:05:40 Connecting to worker loan_approval_worker_2 at localhost:9192
+2025/10/05 21:05:40 Connecting to worker loan_approval_worker at localhost:9191
+2025/10/05 21:05:40 Successfully connected to worker loan_approval_worker
+2025/10/05 21:05:40 Successfully connected to worker loan_approval_worker_3
+2025/10/05 21:05:40 Successfully connected to worker loan_approval_worker_2
+2025/10/05 21:05:40 Selected worker loan_approval_worker for workflow execution
+2025/10/05 21:05:40 Successfully sent workflow execution request to worker loan_approval_worker
+2025/10/05 21:05:40 Created initial variables for workflow 72
+[GIN] 2025/10/05 - 21:05:40 | 200 |      13.183ms |             ::1 | POST     "/api/v1/workflows/start"
+2025/10/05 21:05:40 Received execution response from worker loan_approval_worker: success=true, message=Workflow execution started
+2025/10/05 21:05:40 Received state update from worker loan_approval_worker: workflow_id=72, state=PostLoanApplication, status=p
+2025/10/05 21:05:40 Saved variables for workflow 72, task PostLoanApplication
+2025/10/05 21:05:41 Received state update from worker loan_approval_worker: workflow_id=72, state=PostLoanApplication, status=f
+2025/10/05 21:05:41 Saved variables for workflow 72, task PostLoanApplication
+2025/10/05 21:05:41 Workflow 72 completed on worker loan_approval_worker: status=f
+2025/10/05 21:05:41 Saved final variables for completed workflow 72
+2025/10/05 21:05:41 Updated workflow 72 status to success
+2025/10/05 21:05:41 Finished handling responses for workflow 72
+2025/10/05 21:05:41 Closing workflow executor for loan_approval
+2025/10/05 21:05:41 All connections closed for workflow executor loan_approval
+2025/10/05 21:05:43 Executing workflow loan_approval (ID: 73) synchronously with request ID: 57da33e4-638b-49c9-9d18-6e1587afe66d
+2025/10/05 21:05:43 Found 3 workers for workflow loan_approval: [{loan_approval_worker localhost:9191 online 2025-10-05 21:05:20.707222 +0530 IST [loan_approval] 64 map[port:9191]} {loan_approval_worker_3 localhost:9193 online 2025-10-05 21:05:39.752771 +0530 IST [loan_approval] 64 map[port:9193]} {loan_approval_worker_2 localhost:9192 online 2025-10-05 21:05:31.436878 +0530 IST [loan_approval] 64 map[port:9192]}]
+2025/10/05 21:05:43 Creating new worker pool for workflow: loan_approval
+2025/10/05 21:05:43 Creating worker pool with config: workflow_filter=loan_approval, min_workers=1, max_workers=64
+2025/10/05 21:05:43 === DEBUG: Looking for workers for workflow 'loan_approval' ===
+2025/10/05 21:05:43 Pool config: filter='loan_approval', max_workers=64
+2025/10/05 21:05:43 Total workers in pool: 0
+2025/10/05 21:05:43 Connected workers: 0, Compatible workers: 0
+2025/10/05 21:05:43 Starting worker event monitoring for pool (filter: loan_approval)
+2025/10/05 21:05:43 Found 3 existing workers in Redis
+2025/10/05 21:05:43 Connecting to existing worker: loan_approval_worker_2 at localhost:9192
+2025/10/05 21:05:43 Establishing gRPC connection to worker loan_approval_worker_2 at localhost:9192
+[GIN] 2025/10/05 - 21:05:43 | 500 |    4.922292ms |             ::1 | POST     "/api/v1/workflows/start-sync"
+2025/10/05 21:05:43 Successfully connected to worker loan_approval_worker_2 (capacity: 10, workflows: [loan_approval])
+2025/10/05 21:05:43 Connecting to existing worker: loan_approval_worker at localhost:9191
+2025/10/05 21:05:43 Establishing gRPC connection to worker loan_approval_worker at localhost:9191
+2025/10/05 21:05:43 Successfully connected to worker loan_approval_worker (capacity: 10, workflows: [loan_approval])
+2025/10/05 21:05:43 Connecting to existing worker: loan_approval_worker_3 at localhost:9193
+2025/10/05 21:05:43 Establishing gRPC connection to worker loan_approval_worker_3 at localhost:9193
+2025/10/05 21:05:44 Successfully connected to worker loan_approval_worker_3 (capacity: 10, workflows: [loan_approval])
+2025/10/05 21:06:11 Shutting down server...
+2025/10/05 21:06:11 Closing worker pool for workflow: loan_approval
+2025/10/05 21:06:11 Closing worker pool (filter: loan_approval)
+2025/10/05 21:06:11 Error receiving from worker loan_approval_worker_3: rpc error: code = Canceled desc = context canceled
+2025/10/05 21:06:11 Error receiving from worker loan_approval_worker_2: rpc error: code = Canceled desc = context canceled
+2025/10/05 21:06:11 Error receiving from worker loan_approval_worker: rpc error: code = Canceled desc = context canceled
+2025/10/05 21:06:11 Closed connection to worker: loan_approval_worker_2
+2025/10/05 21:06:11 Closed connection to worker: loan_approval_worker
+2025/10/05 21:06:11 Closed connection to worker: loan_approval_worker_3

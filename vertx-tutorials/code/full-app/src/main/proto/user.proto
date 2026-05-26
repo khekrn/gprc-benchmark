@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package com.example.app.grpc.v1;
+
+option java_multiple_files = true;
+option java_package = "com.example.app.grpc.v1";
+option java_outer_classname = "UserProto";
+
+// A small, deliberately well-versioned user service.
+// Demonstrates:
+//   - explicit field numbers in stable, monotonic order
+//   - reserved ranges for removed fields (protobuf golden rule)
+//   - well-defined timestamps (use google.protobuf.Timestamp in real code)
+service UserService {
+    // Unary RPC: client sends one request, server returns one response.
+    rpc GetUser(GetUserRequest)   returns (GetUserResponse);
+    rpc CreateUser(CreateUserRequest) returns (CreateUserResponse);
+}
+
+message GetUserRequest {
+    string id = 1;
+}
+
+message GetUserResponse {
+    User user = 1;
+}
+
+message CreateUserRequest {
+    string email = 1;
+    string name  = 2;
+}
+
+message CreateUserResponse {
+    User user = 1;
+}
+
+message User {
+    string id    = 1;
+    string email = 2;
+    string name  = 3;
+    int64  created_at_epoch_millis = 4;
+
+    // reserved 5;     // example: a removed field. NEVER reuse the field number.
+    // reserved "age"; // example: a removed field name.
+}
