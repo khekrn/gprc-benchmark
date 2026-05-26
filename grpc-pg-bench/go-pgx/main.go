@@ -35,6 +35,7 @@ import (
 
 	benchv1 "github.com/beam/grpc-pg-bench/gen/benchv1"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
@@ -49,35 +50,42 @@ const (
 	fnvPrime32  uint32 = 16777619
 )
 
-const insertSQL = `
-INSERT INTO commands (workflow_id, command_type, payload, seq, checksum)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id`
+// SQL kept byte-identical to kotlin-vertx/.../Db.kt so the two stacks
+// hit the planner with the same prepared-statement text.
+const insertCommandSQL = `INSERT INTO commands (workflow_id, command_type, payload, seq, checksum) VALUES ($1, $2, $3, $4, $5) RETURNING id`
+
+const upsertStateSQL = `INSERT INTO workflow_state (workflow_id, state, version, updated_at) VALUES ($1, $2, 1, now()) ON CONFLICT (workflow_id) DO UPDATE SET state = EXCLUDED.state, version = workflow_state.version + 1, updated_at = now()`
+
+const insertOutboxSQL = `INSERT INTO outbox (workflow_id, event_type, payload) VALUES ($1, $2, $3)`
+
+const selectStateSQL = `SELECT state, version, (EXTRACT(EPOCH FROM updated_at) * 1000000)::BIGINT AS updated_at_micros FROM workflow_state WHERE workflow_id = $1`
 
 type server struct {
 	benchv1.UnimplementedCommandServiceServer
 	pool *pgxpool.Pool
 }
 
-// Execute is the hot path. Keep allocations and indirection minimal.
+// fnv1a returns FNV-1a 32 over s, inlined over the string to avoid both the
+// hash.Hash32 interface alloc and the []byte(s) copy that hash/fnv would force.
+func fnv1a(s string) uint32 {
+	h := fnvOffset32
+	for i := 0; i < len(s); i++ {
+		h ^= uint32(s[i])
+		h *= fnvPrime32
+	}
+	return h
+}
+
+// Execute is the original single-INSERT autocommit hot path.
 func (s *server) Execute(ctx context.Context, req *benchv1.CommandRequest) (*benchv1.CommandResponse, error) {
 	recv := time.Now().UnixMicro()
-
-	// "Small processing": FNV-1a over the payload bytes. Inlined over the
-	// string to skip both the hash.Hash32 interface alloc and the
-	// []byte(req.Payload) copy that hash/fnv would force.
-	payload := req.Payload
-	checksum := fnvOffset32
-	for i := 0; i < len(payload); i++ {
-		checksum ^= uint32(payload[i])
-		checksum *= fnvPrime32
-	}
+	checksum := fnv1a(req.Payload)
 
 	var id int64
-	err := s.pool.QueryRow(ctx, insertSQL,
+	err := s.pool.QueryRow(ctx, insertCommandSQL,
 		req.WorkflowId,
 		req.CommandType,
-		payload,
+		req.Payload,
 		req.Seq,
 		int64(checksum),
 	).Scan(&id)
@@ -89,6 +97,88 @@ func (s *server) Execute(ctx context.Context, req *benchv1.CommandRequest) (*ben
 		Id:               id,
 		Checksum:         checksum,
 		ReceivedAtMicros: recv,
+	}, nil
+}
+
+// ExecuteTx runs the three statements (INSERT command + UPSERT state +
+// INSERT outbox) atomically. The whole batch is pipelined to Postgres in a
+// single network round trip via pgx.Batch — pgx writes BEGIN, the three
+// extended-query messages, and COMMIT back-to-back, then reads all replies.
+// That keeps the wire cost close to the autocommit single-INSERT path while
+// preserving real transactional semantics. Kotlin's vertx-pg-client uses
+// the same pipelining trick (setPipeliningLimit), so this is the apples-to-
+// apples comparison, not an unfair advantage.
+func (s *server) ExecuteTx(ctx context.Context, req *benchv1.CommandRequest) (*benchv1.CommandResponse, error) {
+	recv := time.Now().UnixMicro()
+	checksum := fnv1a(req.Payload)
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// Best-effort rollback on any error path. Commit() makes Rollback a no-op,
+	// so an unconditional defer is safe here.
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback(ctx)
+		}
+	}()
+
+	batch := &pgx.Batch{}
+	batch.Queue(insertCommandSQL, req.WorkflowId, req.CommandType, req.Payload, req.Seq, int64(checksum))
+	batch.Queue(upsertStateSQL, req.WorkflowId, req.CommandType)
+	batch.Queue(insertOutboxSQL, req.WorkflowId, req.CommandType, req.Payload)
+
+	br := tx.SendBatch(ctx, batch)
+	var id int64
+	if err := br.QueryRow().Scan(&id); err != nil {
+		br.Close()
+		return nil, err
+	}
+	if _, err := br.Exec(); err != nil {
+		br.Close()
+		return nil, err
+	}
+	if _, err := br.Exec(); err != nil {
+		br.Close()
+		return nil, err
+	}
+	if err := br.Close(); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	committed = true
+
+	return &benchv1.CommandResponse{
+		Id:               id,
+		Checksum:         checksum,
+		ReceivedAtMicros: recv,
+	}, nil
+}
+
+// GetState is the dominant read shape: single SELECT by primary key.
+// updated_at is converted to micros server-side to skip TIMESTAMPTZ marshal.
+func (s *server) GetState(ctx context.Context, req *benchv1.GetStateRequest) (*benchv1.StateResponse, error) {
+	var state string
+	var version int64
+	var updatedAtMicros int64
+	err := s.pool.QueryRow(ctx, selectStateSQL, req.WorkflowId).
+		Scan(&state, &version, &updatedAtMicros)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return &benchv1.StateResponse{Found: false, WorkflowId: req.WorkflowId}, nil
+		}
+		return nil, err
+	}
+	return &benchv1.StateResponse{
+		Found:           true,
+		WorkflowId:      req.WorkflowId,
+		State:           state,
+		Version:         version,
+		UpdatedAtMicros: updatedAtMicros,
 	}, nil
 }
 
