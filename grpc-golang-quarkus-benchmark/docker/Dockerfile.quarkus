@@ -1,0 +1,48 @@
+# Multi-stage build for Quarkus gRPC server
+FROM maven:3.9.5-eclipse-temurin-21 AS builder
+
+# Set working directory
+WORKDIR /app
+
+# Copy pom.xml first for better caching
+COPY quarkus/pom.xml ./
+
+# Download dependencies
+RUN mvn dependency:go-offline -B
+
+# Copy source code
+COPY quarkus/src ./src/
+
+# Build the application
+RUN mvn clean package -DskipTests -B
+
+# Final stage
+FROM eclipse-temurin:21-jre-alpine
+
+# Install curl for health checks
+RUN apk add --no-cache curl
+
+WORKDIR /app
+
+# Copy the built application
+COPY --from=builder /app/target/quarkus-app/ ./
+
+# Create non-root user
+RUN addgroup -g 1001 -S appgroup && \
+    adduser -u 1001 -S appuser -G appgroup && \
+    chown -R appuser:appgroup /app
+
+USER appuser
+
+# Expose ports
+EXPOSE 50052 8081
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8081/health || exit 1
+
+# Set JVM options for container
+ENV JAVA_OPTS="-Xmx512m -Xms256m -XX:+UseG1GC -XX:MaxGCPauseMillis=100 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
+
+# Command to run
+CMD ["java", "-jar", "quarkus-run.jar"]
