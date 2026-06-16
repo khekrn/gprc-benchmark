@@ -1,0 +1,13 @@
+version: v2
+modules:
+  - path: proto-src
+deps:
+  - buf.build/googleapis/googleapis
+breaking:
+  use:
+    - FILE
+lint:
+  use:
+    - BASIC
+    - COMMENTS
+    - FILE_LAYOUT

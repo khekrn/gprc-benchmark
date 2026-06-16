@@ -1,0 +1,87 @@
+syntax = "proto3";
+
+package benchmark.v1;
+
+option go_package = "github.com/benchmark/proto/v1;benchmarkpb";
+option java_package = "com.benchmark.proto.v1";
+option java_outer_classname = "BenchmarkProto";
+
+import "google/protobuf/timestamp.proto";
+
+// Message structure with approximately 4KB payload
+message BenchmarkMessage {
+  string id = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  string operation_type = 3; // "unary" or "streaming"
+  bytes payload = 4; // 4KB payload
+  MessageMetadata metadata = 5;
+  repeated DataPoint data_points = 6;
+}
+
+message MessageMetadata {
+  string client_id = 1;
+  string server_type = 2; // "golang" or "quarkus"
+  int64 sequence_number = 3;
+  string correlation_id = 4;
+  map<string, string> headers = 5;
+}
+
+message DataPoint {
+  string key = 1;
+  string value = 2;
+  double numeric_value = 3;
+  google.protobuf.Timestamp created_at = 4;
+}
+
+message UnaryRequest {
+  BenchmarkMessage message = 1;
+  bool save_to_db = 2;
+}
+
+message UnaryResponse {
+  string id = 1;
+  string status = 2;
+  google.protobuf.Timestamp processed_at = 3;
+  int64 processing_time_ms = 4;
+  string server_type = 5;
+  bool saved_to_db = 6;
+}
+
+message StreamingRequest {
+  BenchmarkMessage message = 1;
+  bool save_to_db = 2;
+  int32 batch_size = 3;
+}
+
+message StreamingResponse {
+  string id = 1;
+  string status = 2;
+  google.protobuf.Timestamp processed_at = 3;
+  int64 processing_time_ms = 4;
+  string server_type = 5;
+  int32 batch_count = 6;
+  bool saved_to_db = 7;
+}
+
+// Health check message
+message HealthRequest {
+  string service = 1;
+}
+
+message HealthResponse {
+  string status = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  string server_type = 3;
+}
+
+// Service definitions
+service BenchmarkService {
+  // Unary RPC
+  rpc ProcessUnary(UnaryRequest) returns (UnaryResponse);
+  
+  // Bidirectional streaming RPC
+  rpc ProcessStreaming(stream StreamingRequest) returns (stream StreamingResponse);
+  
+  // Health check
+  rpc HealthCheck(HealthRequest) returns (HealthResponse);
+}
