@@ -20,8 +20,9 @@ WORKDIR /app
 
 COPY --from=build /workspace/full-app/target/full-app-1.0.0-SNAPSHOT.jar /app/app.jar
 
-# Container-aware JVM defaults.  -XX:+UseZGC enables generational ZGC by default on 25.
-ENV JAVA_OPTS="-XX:MaxRAMPercentage=75 -XX:+UseZGC -XX:+UnlockExperimentalVMOptions \
+# Container-aware JVM defaults.  -XX:+UseZGC selects generational ZGC by default on 25
+# (no -XX:+UnlockExperimentalVMOptions / -XX:+ZGenerational needed any more).
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=75 -XX:+UseZGC \
                -XX:+EnableDynamicAgentLoading \
                -Dfile.encoding=UTF-8 \
                -Dvertx.disableDnsResolver=true"

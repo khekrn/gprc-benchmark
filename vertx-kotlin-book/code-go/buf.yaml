@@ -1,0 +1,23 @@
+version: v2
+modules:
+  - path: proto
+lint:
+  use:
+    - STANDARD
+  except:
+    # The Users service mixes unary and streaming RPCs by design (the book
+    # teaches all four call shapes on one service), so allow unary RPCs.
+    - UNARY_RPC
+    # Wire package is com.example.app.grpc to match the Kotlin server; that
+    # is intentionally not a .v1 suffixed, directory-matched package.
+    - PACKAGE_VERSION_SUFFIX
+    - PACKAGE_DIRECTORY_MATCH
+    # The service/message names mirror the Kotlin contract verbatim (Users,
+    # UserReply reused across RPCs) rather than buf's Std naming guidance.
+    - SERVICE_SUFFIX
+    - RPC_REQUEST_RESPONSE_UNIQUE
+    - RPC_REQUEST_STANDARD_NAME
+    - RPC_RESPONSE_STANDARD_NAME
+breaking:
+  use:
+    - FILE

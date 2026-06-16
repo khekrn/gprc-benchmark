@@ -6,9 +6,12 @@
 
 ## 19.1 The honest framing
 
-Project Loom shipped virtual threads in Java 21. JDK 25 ships stable
-**virtual threads**, **structured concurrency**, and **scoped values**.
-You can write blocking-style code that scales like async code:
+Project Loom finalized virtual threads in Java 21 (JEP 444), so on
+JDK 25 **virtual threads are a stable, production feature**. **Scoped
+values** were finalized in JDK 25 (JEP 506), but **structured
+concurrency** is still *preview* (JEP 505 — you must compile/run with
+`--enable-preview`), and its API is still moving. You can already write
+blocking-style code that scales like async code:
 
 ```java
 try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
@@ -24,8 +27,8 @@ might wonder why you still need it. This chapter answers that.
 - Convert legacy blocking JDBC apps to "scalable" with minimal change.
 - Bridge to libraries that still parks the OS thread.
 - Give you "one stack per request" debugging.
-- Are fully integrated with JDK locks, `synchronized` (in 25), and
-  monitor primitives.
+- Are fully integrated with JDK locks, `synchronized` (no longer pins
+  the carrier since JDK 24, JEP 491), and monitor primitives.
 
 ## 19.3 What virtual threads don't change
 
@@ -192,8 +195,10 @@ Now that you've finished the book:
   `AbstractCoroutine`, `DispatchedTask` are the three classes to read.
 - Add your **own driver**. Pick a protocol Vert.x doesn't have. Build
   one. You will learn more than from any book.
-- Read **JEP 444** (virtual threads), **JEP 480** (structured
-  concurrency), **JEP 446** (scoped values). They will shape what
-  the JVM looks like in the next two years.
+- Read **JEP 444** (virtual threads — final in 21). For the preview
+  siblings, read the *current* JEPs: **JEP 505** (structured
+  concurrency, preview in JDK 25) and **JEP 506** (scoped values,
+  finalized in JDK 25). They will shape what the JVM looks like in the
+  next two years.
 
 Thank you for reading.

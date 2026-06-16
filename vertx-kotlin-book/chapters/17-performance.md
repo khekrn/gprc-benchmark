@@ -100,13 +100,15 @@ In our Dockerfile:
 ```
 -XX:MaxRAMPercentage=75
 -XX:+UseZGC
--XX:+UnlockExperimentalVMOptions
 -XX:+EnableDynamicAgentLoading
 ```
 
 Modern defaults that just work:
 
-- **ZGC generational** is the default on JDK 25.
+- **Generational ZGC** is the *default mode* under `-XX:+UseZGC` on
+  JDK 25. You do **not** need `-XX:+UnlockExperimentalVMOptions` (ZGC is
+  no longer experimental) and the old `-XX:+ZGenerational` toggle is
+  obsolete — generational is the only mode now.
 - **`MaxRAMPercentage=75`** keeps room for off-heap (Netty direct
   buffers) without us computing exact MB.
 - **Don't use `-Xmx`** in containers; let `MaxRAMPercentage` see the
@@ -172,7 +174,7 @@ Look at:
 
 1. **Index your SQL.** A missing index is a 100× perf hit.
 2. **Reduce allocations.** Reuse `Buffer`/`StringBuilder` for hot
-   formatting. Use `vertx.fileSystem().setReuseAddress`.
+   formatting; prefer pre-sized buffers over repeated growth.
 3. **Avoid `JsonObject.mapFrom`** in hot paths if your data class is
    tiny — write the JSON by hand or use Jackson with a precompiled
    `ObjectWriter`.

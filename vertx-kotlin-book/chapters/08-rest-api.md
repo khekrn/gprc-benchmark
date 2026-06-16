@@ -116,7 +116,7 @@ private suspend fun handleStreamUsers(ctx: RoutingContext) {
         val line = JsonObject.mapFrom(user).encode() + "\n"
         if (resp.writeQueueFull()) {
             // back-pressure: suspend until the socket buffer drains
-            coAwait(Future.future { p -> resp.drainHandler { p.complete() } })
+            Future.future<Void> { p -> resp.drainHandler { p.complete() } }.coAwait()
         }
         resp.write(line)
     }
@@ -131,10 +131,23 @@ Things to note:
   signals. When the kernel's send buffer is full, `writeQueueFull` is
   true; `drainHandler` fires when there's room again. We suspend on it
   via a small Future bridge — that suspension stops `collect` from
-  pulling the next item from the Flow, which stops the channel from
-  draining, which stops the PG cursor from fetching more rows.
+  pulling the next item from the Flow. Since `streamAll` is a cold
+  `flow { }` over a server-side cursor, not pulling means the next
+  `emit` never runs, so the next `cursor.read(...)` is never issued and
+  Postgres is never asked for more rows.
 - **No buffer of the whole result set.** Memory stays flat regardless
   of how many users there are.
+- **`java.time` serialization.** `JsonObject.mapFrom(user)` uses Vert.x's
+  *shared* Jackson `ObjectMapper`, and Vert.x does **not** register modules
+  for you. `User.createdAt` is an `OffsetDateTime`, so without the JSR-310
+  module every serialization throws `Java 8 date/time type ... not supported`.
+  Register it once at startup (see `Main.kt`):
+  ```kotlin
+  DatabindCodec.mapper()
+      .registerKotlinModule()
+      .registerModule(JavaTimeModule())
+      .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)  // ISO-8601, not epoch
+  ```
 
 NDJSON over a stream like this is the cheapest way to expose paged data
 to a curl/jq pipeline. Pair with `pv -L` to throttle and watch the back

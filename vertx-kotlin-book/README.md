@@ -103,8 +103,8 @@ relevant `code/full-app/src/...` file.
 ```bash
 cd code
 docker compose up -d postgres        # local Postgres 17
-./mvnw -B verify                     # build & test all modules
-./mvnw -pl full-app exec:java        # run the demo full-app
+mvn -B verify                        # build & test all modules
+mvn -pl full-app exec:java           # run the demo full-app
 ```
 
 REST test:

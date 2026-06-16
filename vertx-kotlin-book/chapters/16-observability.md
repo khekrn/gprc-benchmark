@@ -9,15 +9,37 @@
 We use **Micrometer** with a **Prometheus** registry, wired into
 Vert.x via `vertx-micrometer-metrics`:
 
+In Vert.x 5 `MicrometerMetricsOptions` **no longer has**
+`setMicrometerRegistry`. To attach a pre-built registry you supply a
+`MicrometerMetricsFactory` to the `Vertx` builder:
+
 ```kotlin
 // observability/Metrics.kt
 val registry = PrometheusMeterRegistry(PrometheusConfig.DEFAULT)
+
 fun options() = MicrometerMetricsOptions()
-    .setMicrometerRegistry(registry)
     .setPrometheusOptions(VertxPrometheusOptions().setEnabled(true))
     .setEnabled(true)
     .setJvmMetricsEnabled(true)
+
+// The registry is handed to Vert.x through a factory, not the options:
+fun factory() = MicrometerMetricsFactory(registry)
+
+// Retrieve the live backend registry anywhere with:
+//   BackendRegistries.getDefaultNow()
 ```
+
+And in `Main.kt` you build Vert.x with both the options and the factory:
+
+```kotlin
+val vertx = Vertx.builder()
+    .with(VertxOptions().setMetricsOptions(Metrics.options()))
+    .withMetrics(Metrics.factory())
+    .build()
+```
+
+(`Vertx.vertx(options)` still exists but cannot attach a custom metrics
+factory, so it cannot bind your pre-built registry.)
 
 Free metrics you get:
 
@@ -169,7 +191,8 @@ sub-second-loss-free deploy.
 
 ## 16.7 Exercises
 
-1. Add a `grpc.request` timer interceptor and graph p50/p99 per method.
+1. Add a `grpc.request` timer via a generic `callHandler` (Vert.x 5 has
+   no interceptor SPI) and graph p50/p99 per method.
 2. Wire OTel exporter to a local Jaeger; confirm trace IDs in logs
    match span IDs in Jaeger.
 3. Add a slow Pool by setting `maxSize=2`. Watch `pg_pool_queue_time`

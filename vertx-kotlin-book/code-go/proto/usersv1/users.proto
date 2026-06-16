@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+// Wire package kept identical to the Kotlin service so the same grpcurl
+// invocations (com.example.app.grpc.Users/GetUser) work against either server.
+package com.example.app.grpc;
+
+option go_package = "github.com/example/users-go/gen/usersv1;usersv1";
+
+// One protobuf file that covers every RPC style the book teaches:
+// unary, server streaming, client streaming, and bidirectional streaming.
+service Users {
+  // ---- Unary ----------------------------------------------------------
+  rpc GetUser   (GetUserRequest)    returns (UserReply);
+  rpc CreateUser(CreateUserRequest) returns (UserReply);
+
+  // ---- Server streaming ----------------------------------------------
+  rpc ListUsers (ListUsersRequest)  returns (stream UserReply);
+
+  // ---- Client streaming ----------------------------------------------
+  rpc ImportUsers(stream CreateUserRequest) returns (ImportSummary);
+
+  // ---- Bidirectional streaming ---------------------------------------
+  rpc Chat(stream ChatMessage) returns (stream ChatMessage);
+}
+
+message GetUserRequest {
+  int64 id = 1;
+}
+
+message CreateUserRequest {
+  string email = 1;
+  string full_name = 2;
+}
+
+message UserReply {
+  int64  id = 1;
+  string email = 2;
+  string full_name = 3;
+  string created_at = 4; // ISO-8601
+}
+
+message ListUsersRequest {
+  int32 page_size = 1;
+  string email_prefix = 2;
+}
+
+message ImportSummary {
+  int64 imported = 1;
+  int64 skipped  = 2;
+  repeated string errors = 3;
+}
+
+message ChatMessage {
+  string from = 1;
+  string text = 2;
+  int64 ts_millis = 3;
+}

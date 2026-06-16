@@ -2,7 +2,7 @@
 
 > By the end of this chapter you will know exactly what a `Future<T>` is
 > in Vert.x 5, how to compose without callbacks using `compose` /
-> `andThen` / `vertxFuture { … }`, when to reach for `Promise`, and how
+> `andThen` / `vertxFuture(…) { … }`, when to reach for `Promise`, and how
 > they bridge to coroutines via `coAwait`.
 
 The Vert.x async type is **`io.vertx.core.Future<T>`**. Every Vert.x API
@@ -23,23 +23,28 @@ later".
 
 ## 3.2 Building a Future: the `vertxFuture { … }` builder
 
-Vert.x 5 ships a modern coroutine builder, `vertxFuture { … }`, that
+Vert.x 5 ships a modern coroutine builder, `vertxFuture(…) { … }`, that
 lets you write a suspending block and get back a `Future<T>`. This is
 the cleanest way to expose suspending code to non-coroutine callers (like
-a gRPC generated interface that wants `Future<UserReply>`).
+a gRPC generated abstract class whose method returns `Future<UserReply>`).
+
+`vertxFuture` is a **top-level function**, not an extension. It takes a
+`CoroutineScope` (and optionally the `Vertx` instance), so you call it as
+`vertxFuture(vertx, scope) { … }` — not `scope.vertxFuture { }`:
 
 ```kotlin
 import io.vertx.kotlin.coroutines.vertxFuture
 
-fun getUser(id: Long): Future<UserReply> = vertxFuture {
+fun getUser(id: Long): Future<UserReply> = vertxFuture(vertx, scope) {
     val u = users.getById(id)          // suspending
     u.toReply()
 }
 ```
 
-Under the hood `vertxFuture { … }` launches a coroutine on
-`Dispatchers.Vertx` (the current Vert.x Context), runs the block, and
-completes the returned Future with the value or the thrown exception.
+Under the hood `vertxFuture(…) { … }` launches a coroutine on the Vert.x
+dispatcher (the current Vert.x Context, from `vertx.dispatcher()`), runs
+the block, and completes the returned Future with the value or the thrown
+exception.
 
 You will see us use this in gRPC code where the *generator* dictates a
 `Future`-returning shape but we want to write straight-line code
@@ -63,7 +68,7 @@ fun loadAsync(): Future<String> {
 
 You usually don't need `Promise`. Prefer:
 
-- `vertxFuture { … }` if your body is suspending,
+- `vertxFuture(vertx, scope) { … }` if your body is suspending,
 - `Future.future { p -> p.complete(…) }` for one-off shorthand,
 - chaining built-ins instead of writing your own.
 
@@ -83,7 +88,7 @@ coroutine code for reference.
 The chained `Future` style works and is what you must read in stack
 traces of any Vert.x library. The coroutine style is what we *write* in
 this book. They interoperate cleanly through `.coAwait()` and
-`vertxFuture { }`.
+`vertxFuture(vertx, scope) { }`.
 
 ## 3.5 Example: a real combinator chain rewritten
 
@@ -100,7 +105,7 @@ fun createIfMissing(input: NewUser): Future<User> =
 Coroutine style with `vertxFuture`:
 
 ```kotlin
-fun createIfMissing(input: NewUser): Future<User> = vertxFuture {
+fun createIfMissing(input: NewUser): Future<User> = vertxFuture(vertx, scope) {
     repo.findByEmail(input.email) ?: repo.create(input)
 }
 ```
@@ -190,7 +195,7 @@ a compile-time hint or a code-smell at review.
 val u: User = repo.findById(1).coAwait()
 
 // coroutine -> Future
-fun get(id: Long): Future<User?> = vertxFuture {
+fun get(id: Long): Future<User?> = vertxFuture(vertx, scope) {
     repo.findById(id)
 }
 
@@ -204,20 +209,21 @@ fun get(id: Long): Future<User?> {
 }
 ```
 
-Prefer `vertxFuture { }`. Use the manual form only when you need to
+Prefer `vertxFuture(vertx, scope) { }`. Use the manual form only when you need to
 control the scope explicitly (e.g. the coroutine should run with a
 particular `MDCContext`).
 
 ## 3.10 Exercises
 
 1. Add a route that returns *both* `countTotal` and `countActive` as
-   one JSON response, using `vertxFuture { coroutineScope { … } }` and
+   one JSON response, using `vertxFuture(vertx, scope) { coroutineScope { … } }` and
    `async`. Measure latency.
 2. Take the same route and rewrite it with `Future.all(a, b)`. Which
    reads better to you? Which produces clearer stack traces if `a`
    fails?
-3. In `UserGrpcService.kt`, find `runOnScope { … }` and rewrite it
-   using `vertxFuture { }` directly.
+3. In `UserGrpcService.kt`, find the `scope.launch { … }` in
+   `listUsers` and explain why a server-streaming RPC uses `launch`
+   while the unary RPCs use `vertxFuture(vertx, scope) { … }`.
 
 ---
 

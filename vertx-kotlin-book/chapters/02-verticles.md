@@ -10,7 +10,7 @@ A verticle is **the unit of deployment in Vert.x**. It is a class with a
 lifecycle (`start`, `stop`), bound to a single Vert.x `Context`, which is
 bound to a single event loop. Think of a verticle as a tiny actor: one
 inbox (its event loop's task queue), no shared mutable state with other
-verticles, communication via the **event bus** (Chapter 4 — covered in
+verticles, communication via the **event bus** (covered in
 this book's appendix).
 
 In our app the verticle is `AppVerticle`:
@@ -42,12 +42,12 @@ The base class `CoroutineVerticle` gives us:
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │  Standard verticle    │  All callbacks run on ONE event loop.       │
-│  AbstractVerticle     │  Never block.                                │
-│                       │  Use for typical async I/O.                  │
+│  ThreadingModel       │  Never block.                                │
+│   .EVENT_LOOP         │  Use for typical async I/O.                  │
 ├─────────────────────────────────────────────────────────────────────┤
 │  Worker verticle      │  Runs on the worker thread pool.            │
-│  setWorker = true     │  Blocking is allowed.                       │
-│                       │  Use for legacy / JDBC / file zipping etc.  │
+│  ThreadingModel       │  Blocking is allowed.                       │
+│   .WORKER             │  Use for legacy / JDBC / file zipping etc.  │
 ├─────────────────────────────────────────────────────────────────────┤
 │  Virtual-thread       │  ThreadingModel.VIRTUAL_THREAD (Vert.x 5).  │
 │  verticle             │  Each event handler runs on a virtual       │
@@ -179,10 +179,11 @@ when measuring per-protocol throughput.
 Look at the top of `AppVerticle.start()`:
 
 ```kotlin
+val connectOptions = DbModule.connectOptions(cfg.db)
 pool = DbModule.pool(vertx, cfg.db)
 if (cfg.db.schemaOnStartup) DbMigrator.migrate(pool)
 
-val repo    = UserRepository(pool)
+val repo    = UserRepository(pool, connectOptions)
 val service = UserService(repo)
 ```
 

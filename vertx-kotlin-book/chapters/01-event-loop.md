@@ -44,11 +44,14 @@ of being pinned to its own core:
 
 ```kotlin
 // code/full-app/src/main/kotlin/com/example/app/Main.kt
-Vertx.vertx(
-    VertxOptions()
-        .setEventLoopPoolSize(Runtime.getRuntime().availableProcessors())
-        ...
-)
+Vertx.builder()
+    .with(
+        VertxOptions()
+            .setEventLoopPoolSize(Runtime.getRuntime().availableProcessors())
+            ...
+    )
+    .withMetrics(Metrics.factory())
+    .build()
 ```
 
 Why care? Because **once a connection is bound to an event loop, every
@@ -158,7 +161,7 @@ What you should do instead:
 val rows = pool.preparedQuery(SQL).execute(Tuple.of(id)).coAwait()
 
 // (b) If the call must block, push it to a worker thread
-val rows = vertx.executeBlocking({ heavyJdbc() }, ordered = false).coAwait()
+val rows = vertx.executeBlocking({ heavyJdbc() }, false).coAwait()
 
 // (c) Or push it to a Virtual Thread executor (we'll wire this in ch 19)
 withContext(virtualThreadDispatcher) { heavyJdbc() }

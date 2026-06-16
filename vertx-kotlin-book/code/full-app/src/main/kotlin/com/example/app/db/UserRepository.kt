@@ -5,17 +5,15 @@ import com.example.app.domain.User
 import com.example.app.domain.UserError
 import io.vertx.core.Vertx
 import io.vertx.kotlin.coroutines.coAwait
+import io.vertx.pgclient.PgConnectOptions
 import io.vertx.pgclient.PgException
+import io.vertx.pgclient.pubsub.PgSubscriber
 import io.vertx.sqlclient.Pool
 import io.vertx.sqlclient.Row
-import io.vertx.sqlclient.RowStream
-import io.vertx.sqlclient.SqlConnection
 import io.vertx.sqlclient.Tuple
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.ClosedSendChannelException
-import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.consumeAsFlow
+import kotlinx.coroutines.flow.flow
 import java.time.OffsetDateTime
 
 /**
@@ -23,9 +21,13 @@ import java.time.OffsetDateTime
  * a domain type, and never leaks Vert.x types into the caller.
  *
  * The repository is stateless except for the Pool reference.  Always inject;
- * never construct a Pool here.
+ * never construct a Pool here.  [connectOptions] is only needed for the
+ * LISTEN/NOTIFY hook, which requires a dedicated (non-pooled) connection.
  */
-class UserRepository(private val pool: Pool) {
+class UserRepository(
+    private val pool: Pool,
+    private val connectOptions: PgConnectOptions? = null,
+) {
 
     // --------- single-row reads ----------------------------------------
 
@@ -62,31 +64,32 @@ class UserRepository(private val pool: Pool) {
     // --------- streaming reads ------------------------------------------
 
     /**
-     * Server-side cursor + RowStream.  We stream rows into a Channel so the
-     * caller can collect them as a Flow without ever materialising the full
-     * result-set in memory.  Used by the gRPC server-streaming endpoint.
+     * Server-side cursor exposed as a cold, back-pressured [Flow].  We hold a
+     * dedicated connection + transaction open for the lifetime of the stream
+     * and read the cursor in [fetchSize] batches.  Because `emit` suspends
+     * until the collector is ready, we never fetch a batch we cannot hand off:
+     * this is end-to-end back-pressure with no manual pause/resume bookkeeping.
+     * Used by the gRPC server-streaming endpoint and the NDJSON REST endpoint.
      */
-    fun streamAll(emailPrefix: String?, fetchSize: Int = 100): Flow<User> {
-        val channel = Channel<User>(capacity = fetchSize)
-        // Acquire a dedicated connection so the transaction wrapping the
-        // cursor stays valid for the lifetime of the stream.
-        pool.withTransaction { conn: SqlConnection ->
-            val sql = if (emailPrefix.isNullOrBlank()) SQL_STREAM_ALL else SQL_STREAM_PREFIX
-            val params = if (emailPrefix.isNullOrBlank()) Tuple.tuple() else Tuple.of("$emailPrefix%")
-            val stream: RowStream<Row> = conn.preparedQuery(sql)
-                .createStream(fetchSize, params)
-            stream.handler { row ->
-                val ok = channel.trySend(rowToUser(row)).isSuccess
-                if (!ok) stream.pause()       // back-pressure: stop reading PG
+    fun streamAll(emailPrefix: String?, fetchSize: Int = 100): Flow<User> = flow {
+        val sql = if (emailPrefix.isNullOrBlank()) SQL_STREAM_ALL else SQL_STREAM_PREFIX
+        val params = if (emailPrefix.isNullOrBlank()) Tuple.tuple() else Tuple.of("$emailPrefix%")
+        val conn = pool.connection.coAwait()
+        try {
+            val tx = conn.begin().coAwait()
+            val cursor = conn.prepare(sql).coAwait().cursor(params)
+            try {
+                do {
+                    val rows = cursor.read(fetchSize).coAwait()
+                    for (row in rows) emit(rowToUser(row))
+                } while (cursor.hasMore())
+            } finally {
+                cursor.close().coAwait()
             }
-            stream.exceptionHandler { t -> channel.close(t) }
-            stream.endHandler { channel.close() }
-            // Resume hook: when the consumer pulls, ask Vert.x for more rows.
-            channel.invokeOnClose { stream.close() }
-            io.vertx.core.Future.succeededFuture<Void>()
-        }.onFailure { t -> channel.close(t) }
-
-        return channel.consumeAsFlow()
+            tx.commit().coAwait()
+        } finally {
+            conn.close().coAwait()
+        }
     }
 
     // --------- batch ------------------------------------------------------
@@ -114,19 +117,18 @@ class UserRepository(private val pool: Pool) {
      * Subscribe to Postgres NOTIFY events on `users_created`.  Each id pushed
      * to the channel was just inserted by *any* client of the database.
      *
-     * The function takes a Vertx instance because we need a long-lived
-     * dedicated connection (not from the pool).
+     * Requires [connectOptions]; the subscriber owns a long-lived dedicated
+     * connection (not from the pool).
      */
     suspend fun listenForNewUsers(vertx: Vertx): Channel<Long> {
+        val opts = connectOptions
+            ?: error("UserRepository was built without PgConnectOptions; LISTEN/NOTIFY unavailable")
         val channel = Channel<Long>(capacity = Channel.BUFFERED)
-        val connectOptions = (pool as io.vertx.pgclient.PgPool).connectOptions
-        val subscriber = io.vertx.pgclient.pubsub.PgSubscriber.subscriber(vertx, connectOptions)
+        val subscriber = PgSubscriber.subscriber(vertx, opts)
         subscriber.connect().coAwait()
         subscriber.channel("users_created").handler { payload ->
             val id = payload.toLongOrNull() ?: return@handler
-            try {
-                channel.trySend(id)
-            } catch (_: ClosedSendChannelException) { /* consumer left */ }
+            channel.trySend(id)   // drop if the consumer is gone; never throws
         }
         channel.invokeOnClose { subscriber.close() }
         return channel

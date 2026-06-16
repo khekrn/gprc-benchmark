@@ -19,12 +19,15 @@ pool.withTransaction { conn ->
 }.coAwait()
 ```
 
-Coroutine version using `vertxFuture` for the block:
+Coroutine version using `vertxFuture` for the block. Note that
+`vertxFuture` is a **top-level** function (not a `CoroutineScope`
+extension); pass `vertx` and a scope explicitly so it runs on a Vert.x
+context:
 
 ```kotlin
 suspend fun createWithAudit(input: NewUser): User =
     pool.withTransaction { conn ->
-        vertxFuture {
+        vertxFuture(vertx, scope) {
             val u = insertUser(conn, input)
             insertAudit(conn, u.id, "created")
             u
@@ -44,72 +47,75 @@ Two pitfalls:
 ## 10.2 Row streaming with server-side cursors
 
 Reading 5 M rows with `SELECT *` and materialising into a List is a
-memory bomb. Use a cursor:
+memory bomb. Use a server-side cursor. A cursor lives inside a
+transaction on a **dedicated connection**, so the recipe is: check out
+a connection, `begin()`, `prepare(sql)`, open a `cursor(tuple)`, then
+read it in batches:
 
 ```kotlin
-pool.withTransaction { conn ->
-    val stream = conn.preparedQuery(SQL).createStream(fetchSize, params)
-    stream.handler { row -> channel.trySend(rowToUser(row)) }
-    stream.exceptionHandler { t -> channel.close(t) }
-    stream.endHandler { channel.close() }
-    Future.succeededFuture<Void>()
-}
+val conn = pool.connection.coAwait()      // dedicated connection
+val tx = conn.begin().coAwait()
+val cursor = conn.prepare(sql).coAwait().cursor(params)
+do {
+    val rows = cursor.read(fetchSize).coAwait()   // N rows / round-trip
+    for (row in rows) emit(rowToUser(row))
+} while (cursor.hasMore())
+cursor.close().coAwait()
+tx.commit().coAwait()
+conn.close().coAwait()
 ```
 
-`createStream(N, params)` opens a PG cursor and fetches `N` rows per
-round-trip. `stream.handler { }` is called once per row, on the event
-loop. We feed each row into a coroutine `Channel`; the consumer pulls
-through a `Flow`.
+`cursor.read(N)` opens a PG cursor and fetches `N` rows per round-trip,
+returning a `RowSet`. `cursor.hasMore()` tells you whether the server
+has more rows to give. The transaction and connection must stay open
+for the **whole** lifetime of the stream — that's why this is a
+dedicated connection, not a pooled `preparedQuery` call.
 
-When the consumer falls behind:
+Note: `createStream(N, tuple)` and `cursor(tuple)` are methods on
+`PreparedStatement` (what `conn.prepare(sql)` resolves to), **not** on
+`PreparedQuery`. `pool.preparedQuery(sql).createStream(...)` does not
+compile.
 
-```kotlin
-val ok = channel.trySend(rowToUser(row)).isSuccess
-if (!ok) stream.pause()
-```
+### Back-pressure for free with `flow { }`
 
-We `pause()` the stream. Vert.x stops asking the driver for the next
-batch. The driver stops reading from the socket. PG stops pushing.
-
-When the consumer catches up: the channel drains, the next `trySend`
-succeeds, and we **don't** explicitly resume. Why? Because Vert.x's
-`RowStream` is a *pull-based* `ReadStream`; resuming has to be wired
-via `fetch(N)`. In our repo, we use a `Channel(fetchSize)` so the
-stream keeps producing until the channel is full again; then it pauses.
-The simpler model is: bounded channel = bounded buffer, and the
-"resume" is implicit because the upstream emits one batch at a time.
-
-For very large streams, the explicit `resume()` after consumption is
-worth wiring:
-
-```kotlin
-channel.invokeOnClose { stream.close() }
-stream.endHandler { channel.close() }
-```
-
-We make sure the stream is closed if the consumer goes away.
+We expose this as a cold `Flow` built with the `flow { }` builder. The
+key property: `emit` **suspends** until the collector is ready to take
+the value. Because we only call `cursor.read(fetchSize)` after the
+previous batch has been fully emitted, we never fetch a batch we can't
+hand off. That is end-to-end back-pressure with no manual
+pause/resume/`fetch(N)` bookkeeping — the suspension *is* the
+back-pressure. And because a `flow { }` block runs lazily per collector,
+the connection is only checked out when someone actually collects.
 
 ## 10.3 The complete `streamAll`
 
 ```kotlin
-fun streamAll(emailPrefix: String?, fetchSize: Int = 100): Flow<User> {
-    val channel = Channel<User>(capacity = fetchSize)
-    pool.withTransaction { conn ->
-        val sql = if (emailPrefix.isNullOrBlank()) SQL_STREAM_ALL else SQL_STREAM_PREFIX
-        val params = if (emailPrefix.isNullOrBlank()) Tuple.tuple() else Tuple.of("$emailPrefix%")
-        val stream: RowStream<Row> = conn.preparedQuery(sql).createStream(fetchSize, params)
-        stream.handler { row ->
-            val ok = channel.trySend(rowToUser(row)).isSuccess
-            if (!ok) stream.pause()
+fun streamAll(emailPrefix: String?, fetchSize: Int = 100): Flow<User> = flow {
+    val sql = if (emailPrefix.isNullOrBlank()) SQL_STREAM_ALL else SQL_STREAM_PREFIX
+    val params = if (emailPrefix.isNullOrBlank()) Tuple.tuple() else Tuple.of("$emailPrefix%")
+    val conn = pool.connection.coAwait()
+    try {
+        val tx = conn.begin().coAwait()
+        val cursor = conn.prepare(sql).coAwait().cursor(params)
+        try {
+            do {
+                val rows = cursor.read(fetchSize).coAwait()
+                for (row in rows) emit(rowToUser(row))
+            } while (cursor.hasMore())
+        } finally {
+            cursor.close().coAwait()
         }
-        stream.exceptionHandler { t -> channel.close(t) }
-        stream.endHandler { channel.close() }
-        channel.invokeOnClose { stream.close() }
-        Future.succeededFuture<Void>()
-    }.onFailure { t -> channel.close(t) }
-    return channel.consumeAsFlow()
+        tx.commit().coAwait()
+    } finally {
+        conn.close().coAwait()
+    }
 }
 ```
+
+No `Channel`, no `trySend`, no manual `pause`/`resume`, no
+`consumeAsFlow`. The `try/finally` around the connection guarantees we
+release it (and roll back the transaction) even if the collector
+cancels mid-stream or a `read` throws.
 
 You use it as a coroutine `Flow`:
 
@@ -129,21 +135,29 @@ react to new user inserts (the schema has a trigger that calls
 
 ```kotlin
 suspend fun listenForNewUsers(vertx: Vertx): Channel<Long> {
+    val opts = connectOptions
+        ?: error("UserRepository was built without PgConnectOptions; LISTEN/NOTIFY unavailable")
     val channel = Channel<Long>(Channel.BUFFERED)
-    val subscriber = PgSubscriber.subscriber(vertx, (pool as PgPool).connectOptions)
+    val subscriber = PgSubscriber.subscriber(vertx, opts)
     subscriber.connect().coAwait()
     subscriber.channel("users_created").handler { payload ->
         val id = payload.toLongOrNull() ?: return@handler
-        try { channel.trySend(id) } catch (_: ClosedSendChannelException) { }
+        channel.trySend(id)   // drop if the consumer is gone; never throws
     }
     channel.invokeOnClose { subscriber.close() }
     return channel
 }
 ```
 
-`PgSubscriber` holds **a dedicated connection** (not from the pool). PG
-notifications are tied to a connection; you can't share with query
-traffic.
+`PgSubscriber.subscriber` takes a `PgConnectOptions`, **not** a `Pool`.
+In Vert.x 5 `io.vertx.pgclient.PgPool` is gone, so you can't cast the
+`Pool` back to it to recover the connect options — keep the
+`PgConnectOptions` around separately (here injected into the repository
+as `connectOptions`; see `DbModule.connectOptions(db)` in Chapter 9).
+`PgSubscriber` holds **a dedicated connection** (not from the pool): PG
+notifications are tied to a connection, so you can't share with query
+traffic. Note also that `trySend` returns a result and never throws on
+a closed channel, so no `try/catch` is needed.
 
 Use cases:
 
@@ -185,7 +199,7 @@ one connection up to `pipeliningLimit`.
 
 ```kotlin
 pool.withTransaction { conn ->
-    vertxFuture {
+    vertxFuture(vertx, scope) {
         val u = conn.preparedQuery(INSERT).execute(...).coAwait().first().let(::rowToUser)
         // Read it back via the same conn — sees uncommitted state
         val v = conn.preparedQuery(SELECT).execute(Tuple.of(u.id)).coAwait().first()

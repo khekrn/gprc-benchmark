@@ -9,9 +9,14 @@
 We use `vertx-config` with three stores, layered later-overrides-earlier:
 
 1. **YAML** in classpath `config/application.yaml` — sensible defaults.
-2. **Environment variables** — `DB_PASSWORD=…`, picked up via the env
-   store with `_` → `.` mapping.
-3. **System properties** — `-Dhttp.port=9000` for local overrides.
+2. **Environment variables** — `DB_PASSWORD=…`, picked up via the `env`
+   store. Note the `env` store exposes each variable under its **raw,
+   flat name** (`DB_PASSWORD`, `DB_HOST`), not a nested `db.host` path —
+   it does *not* translate `_` into `.`. So if your typed parse reads
+   nested keys (`db.host`), either read the flat env key explicitly or
+   pre-process the JSON to fold flat keys into the nested shape.
+3. **System properties** — `-Dhttp.port=9000` for local overrides. The
+   `sys` store likewise keys on the literal property name.
 
 ```kotlin
 // code/full-app/src/main/kotlin/com/example/app/config/AppConfig.kt

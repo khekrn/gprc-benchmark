@@ -88,7 +88,7 @@ final class FetchContinuation : Continuation<User> {
 }
 ```
 
-Reads bottom-to-top:
+Reads top-to-bottom:
 
 1. When the coroutine first runs, `label == 0`. We start the redis call,
    passing `this` as continuation. If redis is slow, we get back

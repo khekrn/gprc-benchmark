@@ -62,6 +62,13 @@ Three knobs worth understanding:
 `PoolOptions.setShared(true)` lets multiple verticles in the same
 process share the same pool. Otherwise you'd open one pool per verticle.
 
+In the real code this lives in `DbModule`, and the `PgConnectOptions`
+are built by a separate `connectOptions(db)` function rather than inline.
+That's deliberate: in Vert.x 5 `io.vertx.pgclient.PgPool` is gone and a
+`Pool` won't hand its connect options back, so anything that needs a
+dedicated (non-pooled) connection — notably the `PgSubscriber` for
+LISTEN/NOTIFY in Chapter 10 — reuses `connectOptions(db)` directly.
+
 ## 9.2 Event-loop affinity of the Pool
 
 The Pool is event-loop-aware. When you call `pool.preparedQuery(…).execute(…)`

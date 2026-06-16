@@ -76,8 +76,12 @@ third reuses the calling coroutine. For dispatcher switches, prefer
 - **Unlimited** (`Channel.UNLIMITED`): no backpressure. Memory bug
   waiting to happen.
 
-We use `Channel(fetchSize)` in `UserRepository.streamAll` to apply
-backpressure to Postgres.
+We don't actually need a hand-rolled `Channel` for the Postgres stream:
+`UserRepository.streamAll` is a cold `flow { }` over a server-side cursor,
+and `emit` already suspends until the collector is ready (see §6.6). Where a
+`Channel` *does* earn its place is in `UserRepository.listenForNewUsers`,
+which fans LISTEN/NOTIFY events from a Vert.x callback into a
+`Channel(Channel.BUFFERED)` for a coroutine consumer.
 
 ## 6.5 Flows — cold streams
 
@@ -100,7 +104,7 @@ Useful operators we use in this book:
 | `map { x -> g(x) }`     | per-item transform                                       |
 | `filter { p }`          | drop items                                               |
 | `take(n)`               | first n items                                            |
-| `chunked(n)`            | group into batches (KotlinX extension)                   |
+| `chunked(n)`            | group into batches of n (`@FlowPreview`, opt-in)         |
 | `onEach { … }`          | side-effect (logging, metrics)                           |
 | `flowOn(Dispatchers.X)` | switch dispatcher upstream                               |
 | `buffer(n)`             | decouple producer and collector by an n-sized channel    |
@@ -110,21 +114,25 @@ Useful operators we use in this book:
 
 This is the killer feature. In Chapter 13 we will serve a gRPC server
 stream by reading rows from Postgres. If the client is slow, the gRPC
-write buffer fills, our handler awaits `drainHandler`, the channel in
-the Flow fills, `trySend` fails, we `pause()` the Postgres `RowStream`.
-Postgres stops reading from its socket. The kernel's TCP buffer stops
-draining. The network back-pressures *all the way back to disk*.
+write buffer fills (`writeQueueFull()`), our handler awaits `drainHandler`,
+and *that suspension stops `collect` from pulling the next item*. Because
+`streamAll` is a cold `flow { }` over a server-side cursor, a stalled
+collector means the next `emit` never runs, so the next
+`cursor.read(fetchSize).coAwait()` is never issued. Postgres is never asked
+for more rows; the cursor simply waits. The kernel's TCP buffers stop
+draining and the network back-pressures *all the way back to disk*.
 
 ```
-  Postgres ──TCP──► pg-client ──Flow──► gRPC writer ──TCP──► slow client
-       ▲              ▲                    ▲                     │
-       │              │                    │                     │
-       └── pause() ◄──┴── trySend fail ◄──┴── writeQueueFull ◄───┘
+  Postgres ──TCP──► pg-client ──cursor.read()──► gRPC writer ──TCP──► slow client
+       ▲                 ▲                            ▲                     │
+       │                 │                            │                     │
+       └─ no next read ◄─┴── emit suspends (no pull) ◄┴── writeQueueFull ◄──┘
 ```
 
-Nothing in this chain "buffers infinitely". A slow client costs the
-server only what one channel + one socket buffer cost. Memory stays
-flat.
+The back-pressure is driven by *demand*, not by pausing a hot stream:
+nothing fetches a batch it cannot hand off. Nothing in this chain "buffers
+infinitely". A slow client costs the server only what one cursor batch + one
+socket buffer cost. Memory stays flat.
 
 ## 6.7 SharedFlow and StateFlow
 
@@ -153,10 +161,13 @@ suspension point, which is also a cancellation point.
 
 ## 6.9 The shape of our code
 
-Look at `Routes.coHandler` and `UserGrpcService.vertxFuture`:
+Look at `Routes.coHandler` and the `vertxFuture(vertx, scope) { }` calls in
+`UserGrpcService`:
 
-- We use the verticle's scope (via `vertx.dispatcher()`) → cancellation
-  on undeploy is automatic.
+- We use a `CoroutineScope(SupervisorJob() + vertx.dispatcher())` owned by
+  the component, and pass it explicitly to `scope.launch { }` and to
+  `vertxFuture(vertx, scope) { }` → coroutines run on the event loop and are
+  cancelled when we cancel that scope.
 - We do not `GlobalScope.launch` anywhere.
 - Long-running streams (`streamAll`, `chat`) are tied to their request's
   lifetime. When the client disconnects, the gRPC stream ends, the
@@ -173,8 +184,11 @@ Look at `Routes.coHandler` and `UserGrpcService.vertxFuture`:
    low. (Backpressure works.)
 2. Remove the `writeQueueFull` / `drainHandler` block. Re-run with a
    slow consumer. Memory grows. Why exactly?
-3. Convert `streamAll` to `Channel.UNLIMITED`. Hit it under load. RSS
-   climbs. Same lesson — bounded channels prevent runaway memory.
+3. Replace the cursor-based `streamAll` with an eager version that buffers
+   every row into a `List<User>` before returning (or feeds a
+   `Channel.UNLIMITED`). Hit it under load against a large table. RSS climbs.
+   Same lesson — demand-driven streaming and bounded buffers prevent runaway
+   memory.
 
 ---
 

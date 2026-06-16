@@ -79,6 +79,11 @@
             <artifactId>vertx-grpc-protoc-plugin2</artifactId>
         </dependency>
         <dependency>
+            <!-- gRPC server reflection so grpcurl works without the .proto -->
+            <groupId>io.vertx</groupId>
+            <artifactId>vertx-grpc-reflection</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.google.protobuf</groupId>
             <artifactId>protobuf-java</artifactId>
             <version>${protobuf.version}</version>
@@ -206,7 +211,7 @@
                             <version>${vertx.version}</version>
                             <mainClass>io.vertx.grpc.plugin.VertxGrpcGenerator</mainClass>
                             <args>
-                                <arg>--grpc-server</arg>
+                                <arg>--grpc-service</arg>
                                 <arg>--grpc-client</arg>
                             </args>
                         </protocPlugin>
@@ -216,7 +221,6 @@
                     <execution>
                         <goals>
                             <goal>compile</goal>
-                            <goal>compile-custom</goal>
                         </goals>
                     </execution>
                 </executions>

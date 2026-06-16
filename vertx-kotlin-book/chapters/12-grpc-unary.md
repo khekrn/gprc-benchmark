@@ -114,7 +114,7 @@ Two pieces wire the build:
     <version>${vertx.version}</version>
     <mainClass>io.vertx.grpc.plugin.VertxGrpcGenerator</mainClass>
     <args>
-        <arg>--grpc-server</arg>
+        <arg>--grpc-service</arg>
         <arg>--grpc-client</arg>
     </args>
 </protocPlugin>
@@ -123,16 +123,18 @@ Two pieces wire the build:
 Build it:
 
 ```bash
-./mvnw -pl full-app -am -DskipTests compile
+mvn -pl full-app -am -DskipTests compile
 ls target/generated-sources/protobuf/java/com/example/app/grpc/proto/
 ```
 
 You should see, for our `.proto`:
 
 - `GetUserRequest.java`, `CreateUserRequest.java`, `UserReply.java`, …
-- `UsersService.java` — Java interface to implement on the server.
-- `VertxUsersGrpcServer.java` — utility to bind your implementation.
-- `UsersGrpcClient.java` — typed client.
+- `UsersService.java` — an abstract **class** you extend on the server
+  (`--grpc-service`); override one method per RPC.
+- `UsersGrpcService.java` — the binder: `UsersGrpcService.of(impl).bind(server)`,
+  plus the `ServiceMethod` descriptors and service name.
+- `UsersClient.java` / `UsersGrpcClient.java` — typed client (`--grpc-client`).
 
 ### Why Kotlin sees these
 
@@ -165,41 +167,47 @@ rpc GetUser   (GetUserRequest)    returns (UserReply);
 rpc CreateUser(CreateUserRequest) returns (UserReply);
 ```
 
-The generated `UsersService` interface gives us two methods that return
-`Future<UserReply>`. We implement them with the modern coroutine bridge:
+Our class extends the generated abstract `UsersService` and overrides the
+two unary methods, which return `Future<UserReply>`. We implement them with
+the modern coroutine bridge:
 
 ```kotlin
-override fun getUser(request: GetUserRequest): Future<UserReply> = vertxFuture {
+override fun getUser(request: GetUserRequest): Future<UserReply> = vertxFuture(vertx, scope) {
     try {
         users.getById(request.id).toReply()
     } catch (e: UserError.NotFound) {
-        throw GrpcException(GrpcStatus.NOT_FOUND, e.message)
+        throw StatusException(GrpcStatus.NOT_FOUND, e.message)
     }
 }
 
-override fun createUser(request: CreateUserRequest): Future<UserReply> = vertxFuture {
+override fun createUser(request: CreateUserRequest): Future<UserReply> = vertxFuture(vertx, scope) {
     try {
         users.create(NewUser(request.email, request.fullName)).toReply()
     } catch (e: UserError.DuplicateEmail) {
-        throw GrpcException(GrpcStatus.ALREADY_EXISTS, e.message)
+        throw StatusException(GrpcStatus.ALREADY_EXISTS, e.message)
     } catch (e: IllegalArgumentException) {
-        throw GrpcException(GrpcStatus.INVALID_ARGUMENT, e.message)
+        throw StatusException(GrpcStatus.INVALID_ARGUMENT, e.message)
     }
 }
 ```
 
 Walk through `getUser`:
 
-- The method signature is dictated by the generator: `Future<UserReply>`
-  in, `GetUserRequest` out. We can't change that — it's the contract.
-- `vertxFuture { ... }` launches a coroutine on the **current event
-  loop's Context**. The block can suspend.
+- The method signature is dictated by the generator: `GetUserRequest`
+  in, `Future<UserReply>` out. We can't change that — it's the contract.
+- `vertxFuture(vertx, scope) { ... }` is the top-level coroutine builder from
+  `io.vertx.kotlin.coroutines`. It runs the suspending block on the Vert.x
+  context's dispatcher and returns the `Future` the generator wants. (`vertx`
+  is the instance; `scope` is a `CoroutineScope` the service owns so the work
+  is cancelled with the service. The `scope` argument defaults to `GlobalScope`,
+  but tying it to a real scope is the production-correct choice.)
 - Inside the block, we call our suspending `users.getById(id)`. If the
-  service throws `UserError.NotFound`, we re-throw as a `GrpcException`
-  with `NOT_FOUND` status. The framework will set the wire trailer
-  accordingly.
+  service throws `UserError.NotFound`, we re-throw as a
+  `io.vertx.grpc.server.StatusException` with `NOT_FOUND` status. The
+  framework sets the wire trailer accordingly. (Vert.x 5 renamed/relocated
+  the old `GrpcException`; on the server you throw `StatusException`.)
 - Any other thrown exception bubbles up and the framework returns
-  `INTERNAL` with a generic message. We log the real one server-side.
+  `UNKNOWN`/`INTERNAL`. We log the real one server-side.
 
 That's the entire unary handler. Compare to:
 
@@ -208,7 +216,7 @@ That's the entire unary handler. Compare to:
 override fun getUser(req: GetUserRequest): Future<UserReply> =
     users.findByIdFuture(req.id)
         .compose { u ->
-            if (u == null) Future.failedFuture(GrpcException(GrpcStatus.NOT_FOUND, "missing"))
+            if (u == null) Future.failedFuture(StatusException(GrpcStatus.NOT_FOUND, "missing"))
             else Future.succeededFuture(u.toReply())
         }
 ```
@@ -303,15 +311,15 @@ sequential.
 
 ## 12.8 Errors over the wire
 
-When the server throws `GrpcException(GrpcStatus.NOT_FOUND, msg)`, the
-client sees a failed Future with a `GrpcException` carrying the same
-status and message:
+When the server throws `StatusException(GrpcStatus.NOT_FOUND, msg)`, the
+client's Future fails with an `io.vertx.grpc.client.InvalidStatusException`
+that carries the status the server actually returned:
 
 ```kotlin
 try {
     val reply = client.getUser(req).coAwait()
-} catch (e: GrpcException) {
-    when (e.status) {
+} catch (e: InvalidStatusException) {
+    when (e.actualStatus()) {                 // expectedStatus() is always OK here
         GrpcStatus.NOT_FOUND       -> /* 404 equivalent */
         GrpcStatus.ALREADY_EXISTS  -> /* 409 equivalent */
         else                       -> /* generic */
@@ -330,15 +338,16 @@ the `.proto`:
 
 ```kotlin
 import io.vertx.grpc.server.GrpcServer
-import io.vertx.grpc.reflection.GrpcReflectionService
+import io.vertx.grpc.reflection.ReflectionService
 
 val server = GrpcServer.server(vertx)
-// register users
-GrpcReflectionService.bind(server, listOf(UsersService.SERVICE_NAME))
+UserGrpcService(vertx, service).bindTo(server)   // your service
+ReflectionService.v1().bind(server)              // + reflection
 ```
 
-You'll need the `vertx-grpc-reflection` artifact. Useful for dev; usually
-off in production.
+`ReflectionService` is itself a `Service`; `v1()` builds the v1 reflection
+service and `bind(server)` registers it. You'll need the
+`vertx-grpc-reflection` artifact. Useful for dev; usually off in production.
 
 ## 12.10 Exercises
 
@@ -347,7 +356,7 @@ off in production.
    `vertxFuture { }`.
 2. Translate every domain error in `UserError` to a `GrpcStatus`. Write
    a single `mapDomainError(t: Throwable): Nothing` helper that throws
-   `GrpcException`.
+   `StatusException`.
 3. Write a Kotlin client that pings GetUser, measures p50/p99 latency
    over 10,000 requests, and prints the histogram.
 

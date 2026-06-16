@@ -43,10 +43,11 @@ class AppVerticle : CoroutineVerticle() {
     override suspend fun start() {
         val cfg = AppConfig.load(vertx).coAwait()
 
+        val connectOptions = DbModule.connectOptions(cfg.db)
         pool = DbModule.pool(vertx, cfg.db)
         if (cfg.db.schemaOnStartup) DbMigrator.migrate(pool)
 
-        val repo    = UserRepository(pool)
+        val repo    = UserRepository(pool, connectOptions)
         val service = UserService(repo)
 
         // ---- HTTP -----------------------------------------------------
@@ -61,6 +62,7 @@ class AppVerticle : CoroutineVerticle() {
         // ---- gRPC -----------------------------------------------------
         val grpcServer = GrpcServer.server(vertx)
         UserGrpcService(vertx, service).bindTo(grpcServer)
+        io.vertx.grpc.reflection.ReflectionService.v1().bind(grpcServer)  // grpcurl w/o .proto
         grpcHttp = vertx.createHttpServer()
             .requestHandler(grpcServer)
             .listen(cfg.grpc.port).coAwait()

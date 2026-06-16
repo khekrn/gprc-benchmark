@@ -39,42 +39,46 @@ plumbing as a chunked HTTP response.
 rpc ListUsers (ListUsersRequest) returns (stream UserReply);
 ```
 
-Single request in, many replies out. Generated Kotlin signature on
-`UsersService`:
+Single request in, many replies out. The generator gives the abstract
+`UsersService` two overridable forms for a server-streaming RPC:
 
 ```kotlin
-fun listUsers(
-    request: ListUsersRequest,
-    response: WriteStream<UserReply>,
-): Future<Void>
+// (a) return the whole stream — the framework pipes it to the client
+fun listUsers(request: ListUsersRequest): Future<ReadStream<UserReply>>
+
+// (b) write rows yourself as they become available  ← we override this one
+fun listUsers(request: ListUsersRequest, response: WriteStream<UserReply>)
 ```
 
-`WriteStream` is the standard Vert.x sink with `write`, `end`,
-`writeQueueFull`, `drainHandler`. Returns `Future<Void>` so the
-framework knows when we're done writing.
+We override form **(b)**. Note it returns **`Unit`**, not `Future<Void>`:
+the framework considers the RPC complete when we call `response.end()`, not
+when a Future resolves. `WriteStream` is the standard Vert.x sink with
+`write`, `end`, `writeQueueFull`, `drainHandler`. At runtime the `response`
+is actually a `GrpcServerResponse`, so we can cast it to set an error status.
 
 ## 13.3 Implementation
 
+Because the override is `Unit`-returning but our body wants to suspend, we
+launch a coroutine on a scope the service owns:
+
 ```kotlin
-override fun listUsers(
-    request: ListUsersRequest,
-    response: WriteStream<UserReply>,
-): Future<Void> = vertxFuture {
-    var n = 0L
-    try {
-        users.streamAll(request.emailPrefix.ifBlank { null }).collect { u ->
-            if (response.writeQueueFull()) {
-                Future.future<Void> { p -> response.drainHandler { p.complete() } }.coAwait()
+override fun listUsers(request: ListUsersRequest, response: WriteStream<UserReply>) {
+    scope.launch {
+        var n = 0L
+        try {
+            users.streamAll(request.emailPrefix.ifBlank { null }).collect { u ->
+                if (response.writeQueueFull()) {
+                    Future.future<Void> { p -> response.drainHandler { p.complete() } }.coAwait()
+                }
+                response.write(u.toReply())
+                n++
             }
-            response.write(u.toReply())
-            n++
+            response.end().coAwait()
+            log.debug("listUsers sent {} rows", n)
+        } catch (t: Throwable) {
+            log.error("listUsers failed after {} rows", n, t)
+            (response as? GrpcServerResponse<*, *>)?.status(GrpcStatus.INTERNAL)?.end()
         }
-        response.end().coAwait()
-        log.debug("listUsers sent {} rows", n)
-        null
-    } catch (t: Throwable) {
-        log.error("listUsers failed after {} rows", n, t)
-        throw t
     }
 }
 ```
@@ -158,9 +162,11 @@ Use streaming when N is open-ended.
 
 - **Forgetting `response.end()`.** The client hangs. There's no
   timeout by default.
-- **Throwing without `response.end()`.** The framework sees the failed
-  Future and writes `grpc-status: INTERNAL` for you — fine for us, but
-  log the cause server-side.
+- **Failing without ending the response.** Because the override returns
+  `Unit` and the work runs in a launched coroutine, the framework can't
+  observe a thrown exception for you. Catch it and end the response with a
+  non-OK status yourself (`(response as GrpcServerResponse).status(...).end()`),
+  and log the cause server-side.
 - **Writing on `writeQueueFull = true`.** Vert.x buffers internally
   until you exceed `setWriteQueueMaxSize`. Not crash but heap grows.
   Always check.
@@ -170,12 +176,12 @@ Use streaming when N is open-ended.
 
 ## 13.7 Cancellation
 
-If the client disconnects, the gRPC stream is cancelled and our
-collector eventually fails with a `CancellationException` on the next
-`write`. Because we're inside `vertxFuture`, the exception bubbles
-up and the framework completes the response Future with the failure.
-The Flow's collector exits; its `invokeOnClose` closes the PG cursor;
-the connection returns to the pool. Clean.
+If the client disconnects, the gRPC stream is cancelled and the next
+`response.write`/`drainHandler` await fails. The launched coroutine unwinds
+through the `Flow` collector, and because `streamAll` is built with the
+`flow { }` builder, its `finally` blocks run: the PG cursor is closed and
+the dedicated connection is returned to the pool. Clean. (Cancelling the
+`scope` on service shutdown has the same effect on any in-flight streams.)
 
 ## 13.8 Exercises
 
@@ -184,8 +190,10 @@ the connection returns to the pool. Clean.
    (no rows consumed).
 2. Add a `maxRows` request field. Honour it server-side; treat
    `maxRows == 0` as "no limit". Add a test.
-3. Modify `streamAll` to NOT call `stream.pause()` on `trySend` fail.
-   Re-run with throttled client. Memory grows. Why exactly?
+3. Replace the cursor-based `streamAll` with a version that loads the whole
+   table into a `List<User>` and returns it as a `Flow`. Re-run with a
+   throttled client and watch heap. Why does the cursor version stay flat
+   while the list version grows with row count?
 
 ---
 

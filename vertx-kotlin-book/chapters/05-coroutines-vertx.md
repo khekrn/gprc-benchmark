@@ -2,8 +2,8 @@
 
 > By the end of this chapter you will rewrite a tangled callback chain
 > into linear suspending code, know when to use `coAwait`,
-> `vertxFuture { }`, `suspendCancellableCoroutine`, and `withContext`,
-> and have built reusable bridges for any Vert.x async API.
+> `vertxFuture(vertx, scope) { }`, `suspendCancellableCoroutine`, and
+> `withContext`, and have built reusable bridges for any Vert.x async API.
 
 This is the most practically useful chapter in Part 2. If you skim
 nothing else, read this.
@@ -15,16 +15,23 @@ There are two adapters between Kotlin coroutines and Vert.x:
 | Direction                  | Tool                       | Module                        |
 |----------------------------|----------------------------|-------------------------------|
 | `Future<T>` → suspend value | `Future<T>.coAwait(): T`   | `vertx-lang-kotlin-coroutines`|
-| suspend block → `Future<T>` | `vertxFuture { … }: Future<T>` | `vertx-lang-kotlin-coroutines`|
+| suspend block → `Future<T>` | `vertxFuture(vertx, scope) { … }: Future<T>` | `vertx-lang-kotlin-coroutines`|
 | anything async → suspend   | `suspendCancellableCoroutine { … }` | `kotlinx-coroutines-core`|
 
 `coAwait` is the workhorse. It uses `suspendCancellableCoroutine` under
 the hood and registers an `onComplete` handler that resumes.
 
-`vertxFuture { }` is the inverse. You want to expose a `Future`-returning
+`vertxFuture(...)` is the inverse. You want to expose a `Future`-returning
 function to callers that don't speak `suspend` (e.g. the gRPC generator).
 Inside the block, you write suspending code. The result becomes the
 Future's value; a thrown exception becomes its failure.
+
+A note on the call shape: `vertxFuture` is a **top-level function**, not a
+method on a scope. Its signatures are `vertxFuture(scope) { }` and
+`vertxFuture(vertx, scope) { }` — you pass the `CoroutineScope` (and, off a
+Vert.x context, the `Vertx`) as arguments. There is no `scope.vertxFuture { }`
+or `vertx.vertxFuture { }`. In our code we always pass both explicitly:
+`vertxFuture(vertx, scope) { … }`.
 
 ## 5.2 The callback nightmare we are leaving behind
 
@@ -88,7 +95,7 @@ You already know this. The point: it gives you a value or throws. No
 ### Bridge 2 — Produce a Future from suspending code
 
 ```kotlin
-fun pricedSummary(id: Long): Future<Summary> = vertxFuture {
+fun pricedSummary(id: Long): Future<Summary> = vertxFuture(vertx, scope) {
     val user = repo.findById(id) ?: throw UserError.NotFound(id)
     val orders = repo.lastOrders(user.id, 10)
     val prices = coroutineScope {
@@ -98,9 +105,13 @@ fun pricedSummary(id: Long): Future<Summary> = vertxFuture {
 }
 ```
 
-`vertxFuture { }` launches a coroutine on the **current Vert.x Context**
-(i.e. the event loop you're on). The Future completes when the block
-returns; an exception fails it.
+`vertxFuture(vertx, scope) { }` launches a coroutine in the scope you
+hand it, dispatched on the **Vert.x event loop** (the `scope` is built
+from `vertx.dispatcher()`). The Future completes when the block returns;
+an exception fails it. The `scope` you pass is what ties the coroutine's
+lifecycle to your verticle — see `UserGrpcService.kt`, where each unary
+RPC is `vertxFuture(vertx, scope) { … }` over a
+`CoroutineScope(SupervisorJob() + vertx.dispatcher())`.
 
 ### Bridge 3 — Bridge a custom async API
 
@@ -131,23 +142,38 @@ when the value tries to come back).
 We have this in `CoroutineExtensions.kt`:
 
 ```kotlin
-fun <T> ReadStream<T>.asFlow(capacity: Int = Channel.BUFFERED): Flow<T> {
-    val channel = Channel<T>(capacity)
-    handler { item ->
-        val ok = channel.trySend(item).isSuccess
-        if (!ok) pause()
+fun <T> ReadStream<T>.asFlow(capacity: Int = 16): Flow<T> {
+    val stream = this
+    return flow {
+        val channel = Channel<T>(capacity)
+        stream.handler { item -> channel.trySend(item) }
+        stream.endHandler { channel.close() }
+        stream.exceptionHandler { t -> channel.close(t) }
+        stream.pause()
+        stream.fetch(capacity.toLong())     // prime: request `capacity` items
+        for (item in channel) {
+            emit(item)
+            stream.fetch(1)                 // request one more per item drained
+        }
     }
-    exceptionHandler { t -> channel.close(t) }
-    endHandler { channel.close() }
-    return channel.consumeAsFlow()
 }
 ```
 
 A `Flow` is cold. A `ReadStream` is hot. The channel gives us a back-pressure
-boundary. When the collector is slow, `trySend` returns failure, we
-`pause()` the upstream stream. When the channel drains, the consumer
-calls `resume` (implicitly via channel sends), which Vert.x resumes via
-`fetch(1)`. Chapter 6 explains backpressure end-to-end.
+boundary. This is the *demand-driven* version: the stream starts paused, we
+prime it with exactly `capacity` items via `fetch(capacity)`, and then pull
+**one** more with `fetch(1)` for every item the collector drains. Because the
+stream only ever delivers what we have asked for, the bounded channel can
+never overflow and back-pressure propagates all the way upstream.
+
+> **Why not the naive `pause()`-on-full version?** A tempting shortcut is to
+> let the handler `trySend` and `pause()` when the channel is full, expecting
+> a later `resume()`. That version *deadlocks*: once the buffer fills, the
+> stream is paused but nothing in the cold-`Flow` collector path ever calls
+> `resume()`/`fetch()`, so no further items arrive, `channel` never drains,
+> and the collector blocks forever. Driving the stream with explicit
+> `fetch(1)` per emitted item is what makes the bridge correct. Chapter 6
+> explains back-pressure end-to-end.
 
 ## 5.4 Dispatching: when to use `withContext`
 
@@ -181,7 +207,7 @@ for a coroutine to escape its scope by accident. Chapter 6 goes deeper.
 ## 5.6 Three traps to avoid
 
 1. **`runBlocking` inside a verticle.** It would block the event loop.
-   Use `vertxFuture { }` or `launch { }` instead.
+   Use `vertxFuture(vertx, scope) { }` or `launch { }` instead.
 2. **`GlobalScope.launch`.** It detaches from your verticle scope. If
    the verticle stops, your coroutine keeps running and may leak the
    Pool / connection. Use the verticle's `launch` (it inherits the
@@ -205,41 +231,58 @@ There is no callback chain left in our repository because we wrote it
 coroutine-first. Here is what `streamAll` would look like as a callback
 chain (for comparison) and what it is now:
 
-Callback version:
+Callback version (note the API: you `prepare(sql)` to get a
+`PreparedStatement`, then `createStream(fetchSize, tuple)` — there is no
+`PreparedQuery.createStream`):
 
 ```kotlin
 fun streamAll(): Future<List<User>> {
     val out = mutableListOf<User>()
     return pool.withTransaction { conn ->
-        val p = Promise.promise<Void>()
-        val stream = conn.preparedQuery(SQL_STREAM_ALL).createStream(100, Tuple.tuple())
-        stream.handler { row -> out.add(rowToUser(row)) }
-        stream.exceptionHandler { t -> p.fail(t) }
-        stream.endHandler { p.complete() }
-        p.future()
+        conn.prepare(SQL_STREAM_ALL).compose { ps ->
+            val p = Promise.promise<Void>()
+            val stream = ps.createStream(100, Tuple.tuple())
+            stream.handler { row -> out.add(rowToUser(row)) }
+            stream.exceptionHandler { t -> p.fail(t) }
+            stream.endHandler { p.complete() }
+            p.future()
+        }
     }.map { out }
 }
 ```
 
-Coroutine + Flow version (we use this in production):
+Coroutine + Flow version (this is what we actually run — a server-side
+**cursor** read in `fetchSize` batches, exposed as a cold `Flow`):
 
 ```kotlin
-fun streamAll(emailPrefix: String?, fetchSize: Int = 100): Flow<User> {
-    val channel = Channel<User>(capacity = fetchSize)
-    pool.withTransaction { conn ->
-        val stream = conn.preparedQuery(SQL).createStream(fetchSize, params)
-        stream.handler { row -> if (!channel.trySend(rowToUser(row)).isSuccess) stream.pause() }
-        stream.exceptionHandler { t -> channel.close(t) }
-        stream.endHandler { channel.close() }
-        channel.invokeOnClose { stream.close() }
-        Future.succeededFuture<Void>()
-    }.onFailure { t -> channel.close(t) }
-    return channel.consumeAsFlow()
+fun streamAll(emailPrefix: String?, fetchSize: Int = 100): Flow<User> = flow {
+    val sql = if (emailPrefix.isNullOrBlank()) SQL_STREAM_ALL else SQL_STREAM_PREFIX
+    val params = if (emailPrefix.isNullOrBlank()) Tuple.tuple() else Tuple.of("$emailPrefix%")
+    val conn = pool.connection.coAwait()
+    try {
+        val tx = conn.begin().coAwait()
+        val cursor = conn.prepare(sql).coAwait().cursor(params)
+        try {
+            do {
+                val rows = cursor.read(fetchSize).coAwait()
+                for (row in rows) emit(rowToUser(row))   // suspends until collector is ready
+            } while (cursor.hasMore())
+        } finally {
+            cursor.close().coAwait()
+        }
+        tx.commit().coAwait()
+    } finally {
+        conn.close().coAwait()
+    }
 }
 ```
 
-The Flow version is **lazy and back-pressured**. The first version
-buffers everything in `out` before returning.
+The Flow version is **lazy and back-pressured**: because `emit` suspends
+until the collector is ready, we never fetch a batch we cannot hand off, and
+the dedicated connection + transaction are held open only for the lifetime of
+the stream. The callback version buffers everything in `out` before
+returning. (Full code, including the `LIKE`-prefix variant and row mapping,
+is in `UserRepository.streamAll`.)
 
 ## 5.8 Exercises
 
@@ -249,8 +292,8 @@ buffers everything in `out` before returning.
 2. Bridge `vertx.fileSystem().readFile(path)` (which returns a
    `Future<Buffer>`) to a `suspend fun readText(path: String): String`.
 3. In `Routes.kt`, find `handleStreamUsers`. Convert it to use
-   `vertxFuture { }` even though it doesn't strictly need to. Is the
-   code clearer or worse?
+   `vertxFuture(vertx, scope) { }` even though it doesn't strictly need
+   to. Is the code clearer or worse?
 
 ---
 

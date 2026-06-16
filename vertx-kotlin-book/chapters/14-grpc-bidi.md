@@ -38,14 +38,13 @@ We **receive** a Vert.x `ReadStream` and **return** a `Future`.
 ## 14.2 Implementation
 
 ```kotlin
-override fun importUsers(request: ReadStream<CreateUserRequest>): Future<ImportSummary> = vertxFuture {
+override fun importUsers(request: ReadStream<CreateUserRequest>): Future<ImportSummary> = vertxFuture(vertx, scope) {
     val inbox = java.util.concurrent.ConcurrentLinkedQueue<CreateUserRequest>()
-    val done = Future.future<Void> { p ->
+    Future.future<Void> { p ->
         request.handler { req -> inbox.add(req) }
         request.endHandler { p.complete() }
         request.exceptionHandler { t -> p.fail(t) }
-    }
-    done.coAwait()    // suspend until client sends its half-close
+    }.coAwait()    // suspend until client sends its half-close
 
     val imported = AtomicLong()
     val skipped  = AtomicLong()
@@ -79,7 +78,7 @@ process *while* inbound bytes arrive — see exercise 1.
 ### A back-pressured streaming variant (preview)
 
 ```kotlin
-override fun importUsers(request: ReadStream<CreateUserRequest>): Future<ImportSummary> = vertxFuture {
+override fun importUsers(request: ReadStream<CreateUserRequest>): Future<ImportSummary> = vertxFuture(vertx, scope) {
     val ch = Channel<CreateUserRequest>(Channel.RENDEZVOUS)
     request.handler { req ->
         val ok = ch.trySend(req).isSuccess
@@ -137,26 +136,28 @@ wants. Examples in the wild:
 
 ### Implementation
 
+Like server streaming, the bidi override returns **`Unit`** and writes to a
+`WriteStream`. For a stateless echo we don't even need a coroutine — plain
+stream handlers suffice, and event-loop ordering guarantees in-order writes:
+
 ```kotlin
 override fun chat(
     request: ReadStream<ChatMessage>,
     response: WriteStream<ChatMessage>,
-): Future<Void> = vertxFuture {
-    Future.future<Void> { p ->
-        request.handler { msg ->
-            val reply = ChatMessage.newBuilder()
-                .setFrom("server")
-                .setText("echo: ${msg.text}")
-                .setTsMillis(System.currentTimeMillis())
-                .build()
-            response.write(reply)
-        }
-        request.endHandler {
-            response.end().onComplete { p.handle(it) }
-        }
-        request.exceptionHandler { t -> p.fail(t) }
-    }.coAwait()
-    null
+) {
+    request.handler { msg ->
+        val reply = ChatMessage.newBuilder()
+            .setFrom("server")
+            .setText("echo: ${msg.text}")
+            .setTsMillis(System.currentTimeMillis())
+            .build()
+        response.write(reply)
+    }
+    request.endHandler { response.end() }
+    request.exceptionHandler { t ->
+        log.warn("chat error", t)
+        (response as? GrpcServerResponse<*, *>)?.status(GrpcStatus.INTERNAL)?.end()
+    }
 }
 ```
 
@@ -165,9 +166,11 @@ Walk through:
 - We don't queue inbound — for echo, we can write the response on the
   spot. The event-loop ordering guarantees in-order writes.
 - `request.endHandler { response.end() }` mirrors the client's
-  half-close.
-- The wrapping `Future.future { p -> ... }` + `coAwait()` keeps the
-  coroutine alive until end-of-stream.
+  half-close, sending the final `grpc-status: 0`.
+- On a stream error we end the response with a non-OK status (the
+  `response` is a `GrpcServerResponse` at runtime). If you needed to suspend
+  inside the handler — e.g. to persist each message — you would `scope.launch { }`
+  the body and `coAwait()` inside, exactly as `listUsers` does.
 
 For chat, you might fan out across many subscribers via a Vert.x event
 bus address or a `SharedFlow`. For our demo, the single-pair echo
@@ -196,11 +199,13 @@ Each line in flicks back an `echo: ...` reply before the next is sent.
 ## 14.7 Cancellation semantics
 
 In bidi, either side can cancel by sending `RST_STREAM`. On the server,
-`request.exceptionHandler` fires; our coroutine throws; the framework
-closes the response.
+`request.exceptionHandler` fires; we end the response with a non-OK
+status (and any in-flight coroutine work is cancelled with the scope).
 
-On the client (Vert.x gRPC), call `stream.cancel()` to send the RST.
-The server's coroutine catches a `CancellationException` and unwinds.
+On the client (Vert.x gRPC), call `request.cancel()` to send the RST.
+On the server, `request.exceptionHandler` fires and we end the response;
+for a coroutine-driven handler the launched job is cancelled when the
+service `scope` is cancelled on shutdown.
 
 Use cancellation for **client timeouts** and **idle streams**. Don't
 rely on it for "I changed my mind" — design protocols so clients can

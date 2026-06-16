@@ -4,68 +4,89 @@
 > and server deadlines that propagate end-to-end, handle cancellation
 > cleanly, and know which gRPC status to return when.
 
-## 15.1 Vert.x gRPC interceptors
+## 15.1 Vert.x gRPC "interceptors"
 
-`GrpcServer` lets you register handlers that wrap *every* call. There is
-no "AOP" annotation — it's a plain handler. Two pieces:
+Vert.x 5 gRPC has **no interceptor SPI** — there is no `.interceptor {}`
+method and no `ServerInterceptor` type. Cross-cutting concerns are done
+with a plain `Handler<GrpcServerRequest>` registered via `callHandler`.
+You register your typed services with `addService(...)` (that is what
+`UsersGrpcService.of(impl).bind(server)` does under the hood), and you
+register a *generic* `callHandler` for buffer-level calls to observe
+every request. The mental model is constant: **inspect the request,
+hang handlers off its response, with access to headers and status**.
+
+A generic timing handler that fires for every call:
 
 ```kotlin
 val grpcServer = GrpcServer.server(vertx)
-    .interceptor { call ->
-        val started = System.nanoTime()
-        val method  = call.methodName().fullMethodName()
-        call.response().endHandler {
-            val elapsed = System.nanoTime() - started
-            Metrics.registry.timer(
-                "grpc.request",
-                "method", method,
-                "status", call.response().status().toString()
-            ).record(elapsed, TimeUnit.NANOSECONDS)
-        }
+grpcServer.callHandler { req ->                      // GrpcServerRequest<Buffer, Buffer>
+    val started = System.nanoTime()
+    val method  = req.fullMethodName()
+    req.response().endHandler {
+        val elapsed = System.nanoTime() - started
+        Metrics.registry.timer(
+            "grpc.request",
+            "method", method,
+        ).record(elapsed, TimeUnit.NANOSECONDS)
     }
+    // delegate to the actual service handler — see below
+}
 ```
 
-Add a logging interceptor:
+`GrpcServerRequest` exposes `fullMethodName()`, `headers()` (a
+`MultiMap` of the request metadata), `connection()`, `timeout()` and
+`response()`. The `GrpcServerResponse` exposes `status(GrpcStatus)`,
+`statusMessage(...)` and `trailers()` (there is no `headers()` on the
+response — initial metadata is implicit; everything after the data goes
+in trailers).
+
+A logging handler that propagates a request id through trailers:
 
 ```kotlin
-.interceptor { call ->
-    val reqId = call.headers().get("x-request-id")
+grpcServer.callHandler { req ->
+    val reqId = req.headers().get("x-request-id")
         ?: java.util.UUID.randomUUID().toString()
     MDC.put("requestId", reqId)
-    call.response().headers().add("x-request-id", reqId)
-    log.info("grpc-start {} from={}", call.methodName().fullMethodName(),
-        call.connection().remoteAddress())
+    req.response().trailers().add("x-request-id", reqId)
+    log.info("grpc-start {} from={}", req.fullMethodName(),
+        req.connection().remoteAddress())
 }
 ```
 
-The exact API for "GrpcServer interceptor" varies a little between
-vertx-grpc 5.x point releases (some expose `addService`, some
-`callHandler`, some a `serverInterceptor` Builder). The mental model is
-constant: **wrap every call, before/after, with access to headers and
-status**.
+Because there is no interceptor chain, the practical pattern is to put
+cross-cutting logic *inside* your service methods (you already have the
+coroutine bridge there) or in a thin wrapping handler that ultimately
+calls into the generated dispatch. Don't reach for a framework feature
+that doesn't exist in 5.x.
 
-## 15.2 Auth interceptor
+## 15.2 Auth check
 
-For a real service you'll want JWT validation in front of every call:
+For a real service you'll want JWT validation in front of every call.
+Read the token off the request headers, and on failure set the status
+and `end()` the response (which short-circuits the call):
 
 ```kotlin
-.interceptor { call ->
-    val auth = call.headers().get("authorization")
+grpcServer.callHandler { req ->
+    val auth  = req.headers().get("authorization")
     val token = auth?.removePrefix("Bearer ")?.trim()
     if (token.isNullOrEmpty()) {
-        call.response().status(GrpcStatus.UNAUTHENTICATED).end()
-        return@interceptor
+        req.response().status(GrpcStatus.UNAUTHENTICATED).end()
+        return@callHandler
     }
-    val sub = jwt.verify(token) ?: run {
-        call.response().status(GrpcStatus.UNAUTHENTICATED).end()
-        return@interceptor
+    val sub = jwt.verify(token)
+    if (sub == null) {
+        req.response().status(GrpcStatus.UNAUTHENTICATED).end()
+        return@callHandler
     }
-    // Make subject available to the handler via call context
-    call.context().put("userId", sub)
+    // Subject verified.  There is no per-call String-keyed context map on
+    // GrpcServerRequest in Vert.x 5 (the old `context().put("k", v)` API is
+    // gone).  Propagate the subject by reading the header again inside the
+    // service method, or via a typed `ContextLocal<String>` if you need it
+    // on the verticle's Vert.x context.
 }
 ```
 
-Interceptors run on the event loop. Avoid blocking calls (use a
+These handlers run on the event loop. Avoid blocking calls (use a
 non-blocking JWT verifier such as `nimbus-jose-jwt` with a JWKS cache,
 async-fetched).
 
@@ -76,30 +97,46 @@ set them; servers honour them.
 
 ### Client-side
 
+The generated typed stub (`client.getUser(req): Future<UserReply>`) does
+not expose a per-call timeout, so for a deadline you drop to the
+low-level `GrpcClient` request API, which returns a `GrpcClientRequest`
+with a `timeout(long, TimeUnit)` setter:
+
 ```kotlin
-client.call(method)
-    .deadline(System.currentTimeMillis() + 200)
-    .execute(req)
+val addr = SocketAddress.inetSocketAddress(9090, "localhost")
+val req  = grpcClient.request(addr, UsersGrpcClient.GetUser).coAwait()
+req.timeout(200, TimeUnit.MILLISECONDS)
+val resp = req.send(GetUserRequest.newBuilder().setId(1).build()).coAwait()
+val reply = resp.last().coAwait()   // unary: single message then end
 ```
 
-If the server doesn't return by deadline, the client gets
-`DEADLINE_EXCEEDED` and cancels the stream.
+Vert.x maps the timeout to the standard `grpc-timeout` header. If the
+server doesn't return in time, the client's Future fails (surfaced as an
+`InvalidStatusException` with `actualStatus() == DEADLINE_EXCEEDED`) and
+the stream is cancelled.
 
 ### Server-side
 
-The framework gives you the deadline via the call. Honour it by setting
-a coroutine timeout:
+The framework surfaces the remaining time as `request.timeout()` on the
+`GrpcServerRequest` — a `long` in milliseconds, `0` when the client set
+no deadline. (Recall the corrected service builds its `Future` with
+`vertxFuture(vertx, scope) { ... }`.) Honour the budget with a coroutine
+timeout:
 
 ```kotlin
-override fun getUser(request: GetUserRequest): Future<UserReply> = vertxFuture {
-    withTimeout(remainingMillisOrDefault(200)) {
+override fun getUser(request: GetUserRequest): Future<UserReply> = vertxFuture(vertx, scope) {
+    val budgetMs = serverRequest.timeout().takeIf { it > 0 } ?: 200L
+    withTimeout(budgetMs) {
         users.getById(request.id).toReply()
     }
 }
 ```
 
 `withTimeout` throws `TimeoutCancellationException` if elapsed; map it
-to `GrpcStatus.DEADLINE_EXCEEDED`.
+to `GrpcStatus.DEADLINE_EXCEEDED` via `StatusException`. (To reach the
+`GrpcServerRequest` from inside a generated method you keep a reference
+to it; the generated abstract method only hands you the decoded request
+message.)
 
 Deadlines propagate naturally **through coroutines**: if A awaits B, and
 A's timeout fires, B is cancelled at its next suspension point.

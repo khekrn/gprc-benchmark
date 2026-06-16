@@ -1,0 +1,8 @@
+#!/bin/sh
+
+CP="/Users/kishorekarunakaran/.m2/repository/io/vertx/vertx-grpc-protoc-plugin2/5.0.11/vertx-grpc-protoc-plugin2-5.0.11.jar":"/Users/kishorekarunakaran/.m2/repository/com/google/api/grpc/proto-google-common-protos/2.50.0/proto-google-common-protos-2.50.0.jar":"/Users/kishorekarunakaran/.m2/repository/com/google/protobuf/protobuf-java/3.25.5/protobuf-java-3.25.5.jar":"/Users/kishorekarunakaran/.m2/repository/com/salesforce/servicelibs/jprotoc/1.2.2/jprotoc-1.2.2.jar":"/Users/kishorekarunakaran/.m2/repository/info/picocli/picocli/4.7.5/picocli-4.7.5.jar":"/Users/kishorekarunakaran/.m2/repository/com/google/guava/guava/32.1.2-jre/guava-32.1.2-jre.jar":"/Users/kishorekarunakaran/.m2/repository/com/google/guava/failureaccess/1.0.1/failureaccess-1.0.1.jar":"/Users/kishorekarunakaran/.m2/repository/com/google/guava/listenablefuture/9999.0-empty-to-avoid-conflict-with-guava/listenablefuture-9999.0-empty-to-avoid-conflict-with-guava.jar"
+ARGS="--grpc-service --grpc-client "
+JVMARGS=""
+
+"/Users/kishorekarunakaran/.sdkman/candidates/java/25.0.1-amzn/bin/java" $JVMARGS -cp $CP io.vertx.grpc.plugin.VertxGrpcGenerator $ARGS
+

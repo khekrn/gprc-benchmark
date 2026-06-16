@@ -155,7 +155,8 @@ will rarely use Reactive Streams operators in this book.
 
 - **JDK 25** — `brew install --cask temurin@25`, then
   `export JAVA_HOME=$(/usr/libexec/java_home -v 25)`.
-- **Maven 3.9+** — `brew install maven` (or use the wrapper once cloned).
+- **Maven 3.9+** — `brew install maven`. (This repo has no Maven wrapper;
+  use the `mvn` on your PATH.)
 - **Docker** — for the local Postgres instance.
 - **grpcurl** — `brew install grpcurl`, used in the gRPC chapters.
 
@@ -204,8 +205,8 @@ From `code/`:
 
 ```bash
 docker compose up -d postgres
-./mvnw -B verify                       # build & test
-./mvnw -pl full-app exec:java          # run (uses Main.kt as entry)
+mvn -B verify                          # build & test
+mvn -pl full-app exec:java             # run (uses Main.kt as entry)
 ```
 
 In a second terminal:

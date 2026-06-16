@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package com.example.app.grpc;
+
+option java_multiple_files = true;
+option java_package = "com.example.app.grpc.proto";
+option java_outer_classname = "UsersProto";
+
+// One protobuf file that covers every RPC style the book teaches.
+// Unary, server streaming, client streaming, and bidirectional streaming.
+service Users {
+
+  // ---- Unary RPC -------------------------------------------------------
+  // Classic request/response.  Chapter 12.
+  rpc GetUser   (GetUserRequest)    returns (UserReply);
+  rpc CreateUser(CreateUserRequest) returns (UserReply);
+
+  // ---- Server streaming ------------------------------------------------
+  // Client sends one request, server sends a stream back.  Chapter 13.
+  // Used for "list all users", search results, log tail, etc.
+  rpc ListUsers (ListUsersRequest)  returns (stream UserReply);
+
+  // ---- Client streaming ------------------------------------------------
+  // Client sends a stream, server returns one response.  Chapter 14.
+  // Useful for bulk uploads where the server aggregates.
+  rpc ImportUsers(stream CreateUserRequest) returns (ImportSummary);
+
+  // ---- Bidirectional streaming -----------------------------------------
+  // Both sides stream independently.  Chapter 14.
+  // We use it for a "chat" between client and server.
+  rpc Chat(stream ChatMessage) returns (stream ChatMessage);
+}
+
+message GetUserRequest {
+  int64 id = 1;
+}
+
+message CreateUserRequest {
+  string email = 1;
+  string full_name = 2;
+}
+
+message UserReply {
+  int64  id = 1;
+  string email = 2;
+  string full_name = 3;
+  string created_at = 4;     // ISO-8601, we keep wire format simple
+}
+
+message ListUsersRequest {
+  int32 page_size = 1;       // server may chunk results in this size
+  string email_prefix = 2;   // optional filter
+}
+
+message ImportSummary {
+  int64 imported = 1;
+  int64 skipped  = 2;
+  repeated string errors = 3;
+}
+
+message ChatMessage {
+  string from = 1;
+  string text = 2;
+  int64 ts_millis = 3;
+}

@@ -1,0 +1,5 @@
+/users-go
+*.test
+*.out
+/dist/
+.idea/

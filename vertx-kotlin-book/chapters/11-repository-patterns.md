@@ -130,6 +130,15 @@ If the DB is briefly unavailable, you might want a one-time retry.
 Don't bury this in the repository. Make it explicit:
 
 ```kotlin
+// PgException exposes `sqlState` (a String SQLSTATE), not an
+// `isTransient()` helper — classify transient errors yourself.
+private fun PgException.isTransient(): Boolean {
+    val s = sqlState ?: return false
+    return s.startsWith("08") ||   // connection exception
+           s == "40001"        ||   // serialization_failure
+           s == "40P01"             // deadlock_detected
+}
+
 suspend fun <T> withRetry(times: Int = 1, block: suspend () -> T): T {
     var attempt = 0
     while (true) {

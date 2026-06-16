@@ -14,8 +14,12 @@ import io.vertx.sqlclient.PoolOptions
  */
 object DbModule {
 
-    fun pool(vertx: Vertx, db: AppConfig.DbConfig): Pool {
-        val connect = PgConnectOptions()
+    /**
+     * Connection options shared by the pool and by the LISTEN/NOTIFY
+     * subscriber (which needs a dedicated, non-pooled connection).
+     */
+    fun connectOptions(db: AppConfig.DbConfig): PgConnectOptions =
+        PgConnectOptions()
             .setHost(db.host)
             .setPort(db.port)
             .setDatabase(db.database)
@@ -30,6 +34,7 @@ object DbModule {
             .setReconnectAttempts(10)
             .setReconnectInterval(500)
 
+    fun pool(vertx: Vertx, db: AppConfig.DbConfig): Pool {
         val poolOpts = PoolOptions()
             .setMaxSize(db.poolMaxSize)
             .setShared(true)
@@ -37,7 +42,7 @@ object DbModule {
 
         return PgBuilder.pool()
             .with(poolOpts)
-            .connectingTo(connect)
+            .connectingTo(connectOptions(db))
             .using(vertx)
             .build()
     }
