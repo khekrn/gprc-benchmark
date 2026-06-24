@@ -1,0 +1,8 @@
+# Artifacts produced by running the chapter demos / benchmarks
+trace.out          # written by ch01/exectrace
+*.prof             # cpu.prof, mem.prof, etc. (pprof)
+*.test             # compiled test binaries from `go test -c`
+*.out              # generic profiling/trace dumps
+
+# Local build output
+/bin/
