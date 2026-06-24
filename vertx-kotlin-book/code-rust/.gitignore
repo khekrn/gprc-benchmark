@@ -1,0 +1,13 @@
+# Rust build artifacts
+/target/
+
+# Backtraces / cores
+*.pdb
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+
+# Env files
+.env

@@ -1,0 +1,55 @@
+[package]
+name = "users-rust"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+description = "Rust port of the book's Vert.x/Kotlin users service (Axum + tonic + tokio-postgres)"
+
+# Single binary, deliberately small and readable so it lines up 1:1 against the
+# Go (`code-go`) and Kotlin (`code/full-app`) equivalents.
+
+[dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "net", "sync", "time"] }
+tokio-util = "0.7"
+axum = "0.7"
+tonic = "0.12"
+tonic-reflection = "0.12"
+prost = "0.13"
+
+# Postgres: tokio-postgres (the low-level async driver that maps cleanly onto
+# pgx's cursor / pipeline / LISTEN-NOTIFY model) pooled with deadpool.
+tokio-postgres = { version = "0.7", features = ["with-chrono-0_4"] }
+deadpool-postgres = "0.14"
+
+futures = "0.3"
+async-stream = "0.3"
+bytes = "1"
+http = "1"
+http-body = "1"
+pin-project-lite = "0.2"
+tower = "0.5"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+chrono = { version = "0.4", features = ["serde"] }
+
+thiserror = "1"
+anyhow = "1"
+
+prometheus = { version = "0.13", features = ["process"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+[build-dependencies]
+tonic-build = "0.12"
+# Vendored protoc binary so the build needs no system `protoc` on PATH.
+protoc-bin-vendored = "3"
+
+[profile.release]
+# Smaller binary, faster runtime — matches what we'd ship.
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+opt-level = 3
+panic = "abort"
