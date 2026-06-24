@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <!--
+    spring-vt: Spring Boot gRPC server + virtual threads + blocking JDBC (HikariCP).
+
+    Spring Boot 4.1 ships first-class gRPC auto-configuration (the
+    spring-boot-starter-grpc-server starter, Netty transport), so there is no
+    third-party gRPC starter here. Each unary RPC runs on a virtual thread
+    (spring.threads.virtual.enabled=true) and does straight-line blocking JDBC
+    through a HikariCP pool — the same per-statement transaction model as the
+    other stacks. Same gRPC contract, same SQL.
+  -->
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>4.1.0</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>com.beam.bench</groupId>
+  <artifactId>spring-vt-bench</artifactId>
+  <version>1.0.0</version>
+  <packaging>jar</packaging>
+
+  <properties>
+    <!-- Bytecode target 21 (virtual threads); runs on the box's JDK 25.
+         grpc-java (1.80.0), protobuf-java (4.34.2) and the ascopes
+         protobuf-maven-plugin (5.1.4) versions are all managed by the
+         Spring Boot 4.1 BOM via the properties referenced below. -->
+    <java.version>21</java.version>
+  </properties>
+
+  <dependencies>
+    <!-- Spring Boot 4.1 native gRPC server (Netty), Spring gRPC 1.1.0 under it. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-grpc-server</artifactId>
+    </dependency>
+    <!-- Blocking JDBC + HikariCP (default Boot pool). -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-jdbc</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+    <!-- Linux epoll transport for grpc-netty. The *classes* jar must be on the
+         COMPILE classpath so GrpcServerConfig can reference Epoll*/EpollIoHandler
+         (it's otherwise only a transitive runtime dep). The classifier jar
+         carries the native .so for runtime. Versions managed by the Spring Boot
+         4.1 BOM (Netty 4.2.x). -->
+    <dependency>
+      <groupId>io.netty</groupId>
+      <artifactId>netty-transport-classes-epoll</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.netty</groupId>
+      <artifactId>netty-transport-native-epoll</artifactId>
+      <classifier>linux-x86_64</classifier>
+      <scope>runtime</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!-- Generate Java protobuf + grpc-java stubs from src/main/proto.
+           Spring Boot 4.1's parent fully pre-configures this plugin (protoc
+           version AND the protoc-gen-grpc-java binary plugin), so no
+           <configuration> is needed — this matches the official spring-grpc
+           samples/grpc-server pom exactly. -->
+      <plugin>
+        <groupId>io.github.ascopes</groupId>
+        <artifactId>protobuf-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <goals>
+              <goal>generate</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+</project>

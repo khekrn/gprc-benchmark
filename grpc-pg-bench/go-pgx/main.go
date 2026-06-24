@@ -101,13 +101,17 @@ func (s *server) Execute(ctx context.Context, req *benchv1.CommandRequest) (*ben
 }
 
 // ExecuteTx runs the three statements (INSERT command + UPSERT state +
-// INSERT outbox) atomically. The whole batch is pipelined to Postgres in a
-// single network round trip via pgx.Batch — pgx writes BEGIN, the three
-// extended-query messages, and COMMIT back-to-back, then reads all replies.
-// That keeps the wire cost close to the autocommit single-INSERT path while
-// preserving real transactional semantics. Kotlin's vertx-pg-client uses
-// the same pipelining trick (setPipeliningLimit), so this is the apples-to-
-// apples comparison, not an unfair advantage.
+// INSERT outbox) atomically inside one transaction.
+//
+// Each statement is sent and awaited *sequentially* — BEGIN, INSERT, UPSERT,
+// INSERT, COMMIT — i.e. five separate round trips to Postgres. This is
+// deliberately NOT pipelined via pgx.Batch: the JVM stacks driven by JDBC on
+// virtual threads (spring-vt, quarkus-vt) physically cannot pipeline a
+// transaction (JDBC is one statement per round trip), so the only model all
+// five stacks can share is sequential statements. Matching kotlin-vertx's
+// per-statement transaction here keeps ExecuteTx an apples-to-apples
+// comparison across every stack rather than handing pgx a wire-cost advantage
+// no JDBC stack can match.
 func (s *server) ExecuteTx(ctx context.Context, req *benchv1.CommandRequest) (*benchv1.CommandResponse, error) {
 	recv := time.Now().UnixMicro()
 	checksum := fnv1a(req.Payload)
@@ -125,26 +129,16 @@ func (s *server) ExecuteTx(ctx context.Context, req *benchv1.CommandRequest) (*b
 		}
 	}()
 
-	batch := &pgx.Batch{}
-	batch.Queue(insertCommandSQL, req.WorkflowId, req.CommandType, req.Payload, req.Seq, int64(checksum))
-	batch.Queue(upsertStateSQL, req.WorkflowId, req.CommandType)
-	batch.Queue(insertOutboxSQL, req.WorkflowId, req.CommandType, req.Payload)
-
-	br := tx.SendBatch(ctx, batch)
 	var id int64
-	if err := br.QueryRow().Scan(&id); err != nil {
-		br.Close()
+	if err := tx.QueryRow(ctx, insertCommandSQL,
+		req.WorkflowId, req.CommandType, req.Payload, req.Seq, int64(checksum),
+	).Scan(&id); err != nil {
 		return nil, err
 	}
-	if _, err := br.Exec(); err != nil {
-		br.Close()
+	if _, err := tx.Exec(ctx, upsertStateSQL, req.WorkflowId, req.CommandType); err != nil {
 		return nil, err
 	}
-	if _, err := br.Exec(); err != nil {
-		br.Close()
-		return nil, err
-	}
-	if err := br.Close(); err != nil {
+	if _, err := tx.Exec(ctx, insertOutboxSQL, req.WorkflowId, req.CommandType, req.Payload); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {

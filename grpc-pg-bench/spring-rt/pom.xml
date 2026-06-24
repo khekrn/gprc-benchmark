@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <!--
+    spring-rt: Spring Boot gRPC + Kotlin COROUTINES + R2DBC (fully reactive).
+
+    The reactive peer to spring-vt: instead of blocking JDBC on virtual threads,
+    each unary RPC is a Kotlin `suspend fun` (grpc-kotlin coroutine stubs) and
+    the DB work is non-blocking R2DBC via Spring's DatabaseClient, bridged to
+    coroutines with awaitSingle/awaitSingleOrNull. No JDBC, no Dispatchers.IO
+    offload, no thread blocked while the DB works — a true reactive comparison
+    against kotlin-vertx / quarkus-rt. Same gRPC contract, same SQL ($1).
+  -->
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>4.1.0</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>com.beam.bench</groupId>
+  <artifactId>spring-rt-bench</artifactId>
+  <version>1.0.0</version>
+  <packaging>jar</packaging>
+
+  <properties>
+    <!-- Bytecode target 21; runs on the box's JDK 25. Kotlin, grpc-java,
+         grpc-kotlin, protobuf and coroutines versions all come from the
+         Spring Boot 4.1 BOM. -->
+    <java.version>21</java.version>
+    <kotlin.version>2.3.0</kotlin.version>
+  </properties>
+
+  <dependencies>
+    <!-- Spring Boot native gRPC server (Netty). -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-grpc-server</artifactId>
+    </dependency>
+    <!-- grpc-kotlin coroutine stubs runtime. -->
+    <dependency>
+      <groupId>io.grpc</groupId>
+      <artifactId>grpc-kotlin-stub</artifactId>
+    </dependency>
+    <!-- Reactive R2DBC: DatabaseClient + ConnectionFactory autoconfig + pool. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-r2dbc</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>r2dbc-postgresql</artifactId>
+    </dependency>
+    <!-- Kotlin + coroutines (versions managed by the Boot BOM). -->
+    <dependency>
+      <groupId>org.jetbrains.kotlin</groupId>
+      <artifactId>kotlin-stdlib</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.jetbrains.kotlin</groupId>
+      <artifactId>kotlin-reflect</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.jetbrains.kotlinx</groupId>
+      <artifactId>kotlinx-coroutines-core</artifactId>
+    </dependency>
+    <!-- Bridges Reactor Publisher <-> coroutines (awaitSingle, executeAndAwait). -->
+    <dependency>
+      <groupId>org.jetbrains.kotlinx</groupId>
+      <artifactId>kotlinx-coroutines-reactor</artifactId>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <sourceDirectory>${project.basedir}/src/main/kotlin</sourceDirectory>
+    <plugins>
+      <!-- Generate protobuf + grpc-java + grpc-kotlin (coroutine) stubs.
+           Mirrors the official spring-grpc samples/grpc-server-kotlin pom. -->
+      <plugin>
+        <groupId>io.github.ascopes</groupId>
+        <artifactId>protobuf-maven-plugin</artifactId>
+        <configuration>
+          <plugins>
+            <plugin kind="binary-maven">
+              <groupId>io.grpc</groupId>
+              <artifactId>protoc-gen-grpc-java</artifactId>
+              <version>${grpc-java.version}</version>
+              <options>@generated=omit</options>
+            </plugin>
+            <plugin kind="jvm-maven">
+              <groupId>io.grpc</groupId>
+              <artifactId>protoc-gen-grpc-kotlin</artifactId>
+              <version>${grpc-kotlin.version}</version>
+              <classifier>jdk8</classifier>
+              <type>jar</type>
+              <options>@generated=omit</options>
+            </plugin>
+          </plugins>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>generate</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.jetbrains.kotlin</groupId>
+        <artifactId>kotlin-maven-plugin</artifactId>
+        <configuration>
+          <args>
+            <arg>-Xjsr305=strict</arg>
+          </args>
+          <compilerPlugins>
+            <plugin>spring</plugin>
+          </compilerPlugins>
+        </configuration>
+        <dependencies>
+          <dependency>
+            <groupId>org.jetbrains.kotlin</groupId>
+            <artifactId>kotlin-maven-allopen</artifactId>
+            <version>${kotlin.version}</version>
+          </dependency>
+        </dependencies>
+        <executions>
+          <execution>
+            <id>compile</id>
+            <goals>
+              <goal>compile</goal>
+            </goals>
+          </execution>
+          <execution>
+            <id>test-compile</id>
+            <goals>
+              <goal>test-compile</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+</project>

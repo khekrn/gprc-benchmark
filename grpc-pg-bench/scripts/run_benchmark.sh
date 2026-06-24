@@ -31,7 +31,7 @@ if [ -s "${HOME}/.sdkman/bin/sdkman-init.sh" ]; then
   set -u
 fi
 
-STACKS="${STACKS:-go-pgx kotlin-vertx rust-tokio}"
+STACKS="${STACKS:-go-pgx rust-tokio kotlin-vertx spring-vt spring-rt spring-kt-vt}"
 LOADGEN="${ROOT_DIR}/bin/loadgen"
 [ -x "${LOADGEN}" ] || { echo "Build loadgen first: ./scripts/build_go.sh"; exit 1; }
 
@@ -67,6 +67,22 @@ truncate_table() {
     >/dev/null 2>&1 || \
   PGPASSWORD="${PG_PASSWORD}" psql "${DATABASE_URL}" -q \
     -c "TRUNCATE commands RESTART IDENTITY;" >/dev/null 2>&1 || true
+}
+
+seed_state() {
+  # Pre-populate workflow_state so read/mixed phases hit real rows instead of
+  # measuring empty-result lookups. The loadgen reads workflow_id "wf-<worker>-
+  # <key>" with worker in [0,c) and key in [0,keyspace); we seed exactly that
+  # grid. Runs after truncate_table (which wipes workflow_state), so it must be
+  # re-seeded for every concurrency level. Stack-independent (done in the DB),
+  # so it can't favour any server.
+  local workers="$1"
+  PGPASSWORD="${PG_PASSWORD}" psql "${DATABASE_URL}" -q -c "
+    INSERT INTO workflow_state (workflow_id, state, version, updated_at)
+    SELECT 'wf-' || w || '-' || k, 'seed', 1, now()
+    FROM generate_series(0, ${workers} - 1) AS w,
+         generate_series(0, ${LOADGEN_KEYSPACE} - 1) AS k
+    ON CONFLICT (workflow_id) DO NOTHING;" >/dev/null 2>&1 || true
 }
 
 wait_for_port() {
@@ -129,6 +145,40 @@ start_server() {
       wait_for_port "${RUST_ADDR%%:*}" "${RUST_ADDR##*:}"
       TARGET_ADDR="${RUST_ADDR}"
       ;;
+    spring-vt)
+      # Spring Boot executable jar; reads LISTEN_PORT for spring.grpc.server.port.
+      # shellcheck disable=SC2086
+      LISTEN_HOST="${SPRING_VT_HOST}" LISTEN_PORT="${SPRING_VT_PORT}" \
+        ${memcap[@]+"${memcap[@]}"} \
+        ${SERVER_PIN[@]+"${SERVER_PIN[@]}"} java ${JVM_OPTS} -jar "${ROOT_DIR}/bin/spring-vt-bench.jar" \
+        >> "${RUN_DIR}/${stack}.server.log" 2>&1 &
+      SERVER_PID=$!
+      wait_for_port "${SPRING_VT_HOST}" "${SPRING_VT_PORT}"
+      TARGET_ADDR="${SPRING_VT_ADDR}"
+      ;;
+    spring-rt)
+      # Spring Boot (Kotlin coroutines + R2DBC) executable jar; reads LISTEN_PORT.
+      # shellcheck disable=SC2086
+      LISTEN_HOST="${SPRING_RT_HOST}" LISTEN_PORT="${SPRING_RT_PORT}" \
+        ${memcap[@]+"${memcap[@]}"} \
+        ${SERVER_PIN[@]+"${SERVER_PIN[@]}"} java ${JVM_OPTS} -jar "${ROOT_DIR}/bin/spring-rt-bench.jar" \
+        >> "${RUN_DIR}/${stack}.server.log" 2>&1 &
+      SERVER_PID=$!
+      wait_for_port "${SPRING_RT_HOST}" "${SPRING_RT_PORT}"
+      TARGET_ADDR="${SPRING_RT_ADDR}"
+      ;;
+    spring-kt-vt)
+      # Spring Boot (Kotlin + virtual threads + HikariCP JDBC) executable jar;
+      # reads LISTEN_PORT for spring.grpc.server.port.
+      # shellcheck disable=SC2086
+      LISTEN_HOST="${SPRING_KT_VT_HOST}" LISTEN_PORT="${SPRING_KT_VT_PORT}" \
+        ${memcap[@]+"${memcap[@]}"} \
+        ${SERVER_PIN[@]+"${SERVER_PIN[@]}"} java ${JVM_OPTS} -jar "${ROOT_DIR}/bin/spring-kt-vt-bench.jar" \
+        >> "${RUN_DIR}/${stack}.server.log" 2>&1 &
+      SERVER_PID=$!
+      wait_for_port "${SPRING_KT_VT_HOST}" "${SPRING_KT_VT_PORT}"
+      TARGET_ADDR="${SPRING_KT_VT_ADDR}"
+      ;;
     *)
       echo "unknown stack: ${stack}" >&2
       return 1
@@ -178,6 +228,10 @@ for stack in ${STACKS}; do
     if [ -z "${TARGET_ADDR:-}" ]; then echo "server failed to start; see log"; cat "${RUN_DIR}/${stack}.server.log"; exit 1; fi
     sleep 1
     truncate_table
+    # Reads need rows to find; seed workflow_state for read/mixed phases only.
+    case "${LOADGEN_MODE}" in
+      read|mixed) seed_state "${c}" ;;
+    esac
 
     OUT_JSON="${RUN_DIR}/${stack}-c${c}.json"
     ${CLIENT_PIN[@]+"${CLIENT_PIN[@]}"} "${LOADGEN}" \

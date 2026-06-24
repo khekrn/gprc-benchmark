@@ -1,0 +1,15 @@
+[2m2026-06-24T07:48:29.426922Z[0m [32m INFO[0m [2mrust_tokio_bench::server[0m[2m:[0m rust-tokio server listening [3maddr[0m[2m=[0m127.0.0.1:50053 [3mpool_min[0m[2m=[0m4 [3mpool_max[0m[2m=[0m32 [3mworkers[0m[2m=[0m2
+[2m2026-06-24T07:48:57.167293Z[0m [32m INFO[0m [2mrust_tokio_bench::server[0m[2m:[0m shutdown signal received, draining in-flight RPCs
+[2m2026-06-24T07:48:57.167384Z[0m [32m INFO[0m [2mrust_tokio_bench::server[0m[2m:[0m graceful stop complete
+[2m2026-06-24T07:48:57.244392Z[0m [32m INFO[0m [2mrust_tokio_bench::server[0m[2m:[0m rust-tokio server listening [3maddr[0m[2m=[0m127.0.0.1:50053 [3mpool_min[0m[2m=[0m4 [3mpool_max[0m[2m=[0m32 [3mworkers[0m[2m=[0m2
+[2m2026-06-24T07:49:24.981099Z[0m [32m INFO[0m [2mrust_tokio_bench::server[0m[2m:[0m shutdown signal received, draining in-flight RPCs
+[2m2026-06-24T07:49:24.981189Z[0m [32m INFO[0m [2mrust_tokio_bench::server[0m[2m:[0m graceful stop complete
+[2m2026-06-24T07:49:25.055974Z[0m [32m INFO[0m [2mrust_tokio_bench::server[0m[2m:[0m rust-tokio server listening [3maddr[0m[2m=[0m127.0.0.1:50053 [3mpool_min[0m[2m=[0m4 [3mpool_max[0m[2m=[0m32 [3mworkers[0m[2m=[0m2
+[2m2026-06-24T07:49:52.817513Z[0m [32m INFO[0m [2mrust_tokio_bench::server[0m[2m:[0m shutdown signal received, draining in-flight RPCs
+[2m2026-06-24T07:49:52.817696Z[0m [32m INFO[0m [2mrust_tokio_bench::server[0m[2m:[0m graceful stop complete
+[2m2026-06-24T07:49:52.908494Z[0m [32m INFO[0m [2mrust_tokio_bench::server[0m[2m:[0m rust-tokio server listening [3maddr[0m[2m=[0m127.0.0.1:50053 [3mpool_min[0m[2m=[0m4 [3mpool_max[0m[2m=[0m32 [3mworkers[0m[2m=[0m2
+[2m2026-06-24T07:50:20.683687Z[0m [32m INFO[0m [2mrust_tokio_bench::server[0m[2m:[0m shutdown signal received, draining in-flight RPCs
+[2m2026-06-24T07:50:20.683847Z[0m [32m INFO[0m [2mrust_tokio_bench::server[0m[2m:[0m graceful stop complete
+[2m2026-06-24T07:50:20.767496Z[0m [32m INFO[0m [2mrust_tokio_bench::server[0m[2m:[0m rust-tokio server listening [3maddr[0m[2m=[0m127.0.0.1:50053 [3mpool_min[0m[2m=[0m4 [3mpool_max[0m[2m=[0m32 [3mworkers[0m[2m=[0m2
+[2m2026-06-24T07:50:48.556190Z[0m [32m INFO[0m [2mrust_tokio_bench::server[0m[2m:[0m shutdown signal received, draining in-flight RPCs
+[2m2026-06-24T07:50:48.556344Z[0m [32m INFO[0m [2mrust_tokio_bench::server[0m[2m:[0m graceful stop complete

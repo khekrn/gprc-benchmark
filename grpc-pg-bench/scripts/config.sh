@@ -18,6 +18,18 @@ export KOTLIN_ADDR="${KOTLIN_HOST}:${KOTLIN_PORT}"
 export RUST_ADDR="${RUST_ADDR:-127.0.0.1:50053}"
 # Rust tokio worker threads — matches GOMAXPROCS / VERTX_EVENT_LOOPS for fairness.
 export RUST_WORKER_THREADS="${RUST_WORKER_THREADS:-2}"
+# Spring Boot gRPC + virtual threads + HikariCP JDBC.
+export SPRING_VT_HOST="${SPRING_VT_HOST:-127.0.0.1}"
+export SPRING_VT_PORT="${SPRING_VT_PORT:-50056}"
+export SPRING_VT_ADDR="${SPRING_VT_HOST}:${SPRING_VT_PORT}"
+# Spring Boot gRPC + Kotlin coroutines + R2DBC (reactive).
+export SPRING_RT_HOST="${SPRING_RT_HOST:-127.0.0.1}"
+export SPRING_RT_PORT="${SPRING_RT_PORT:-50058}"
+export SPRING_RT_ADDR="${SPRING_RT_HOST}:${SPRING_RT_PORT}"
+# Spring Boot gRPC + Kotlin + virtual threads + HikariCP JDBC (tuned for c=128).
+export SPRING_KT_VT_HOST="${SPRING_KT_VT_HOST:-127.0.0.1}"
+export SPRING_KT_VT_PORT="${SPRING_KT_VT_PORT:-50059}"
+export SPRING_KT_VT_ADDR="${SPRING_KT_VT_HOST}:${SPRING_KT_VT_PORT}"
 
 # --- Resource limits (server simulates a 2-core / 4 GB box) ---
 # Server pinned to two cores and capped at 4 GB via systemd-run scope (see

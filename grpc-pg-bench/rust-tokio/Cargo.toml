@@ -3,21 +3,18 @@ name    = "rust-tokio-bench"
 version = "0.1.0"
 edition = "2024"
 
-# Single binary, kept small on purpose so it's easy to read against the Go and
-# Kotlin equivalents. No workspace, no feature gymnastics.
+# Rust side of the benchmark: tonic (gRPC) + tokio-postgres + deadpool pool.
+# The logic is split across small modules under src/ (config, db, service,
+# server, fnv, proto) so it reads cleanly against the Go and Kotlin stacks
+# rather than living in one file.
 
 [dependencies]
-tokio              = { version = "1", features = ["macros", "rt-multi-thread", "signal", "net"] }
-axum               = "0.7"
-tonic              = "0.12"
+tokio              = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
+tonic              = { version = "0.12", features = ["transport"] }
 tonic-health       = "0.12"
 prost              = "0.13"
 tokio-postgres     = "0.7"
 deadpool-postgres  = "0.14"
-hyper              = { version = "1", features = ["server", "http2"] }
-hyper-util         = { version = "0.1", features = ["server-auto", "tokio", "service"] }
-tower              = "0.5"
-fnv                = "1"
 tracing            = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 

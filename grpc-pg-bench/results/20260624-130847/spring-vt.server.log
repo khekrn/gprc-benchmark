@@ -1,0 +1,115 @@
+2026-06-24T13:13:28.974+05:30  INFO 69538 --- [spring-vt-bench] [           main] com.beam.bench.SpringVtApplication       : Starting SpringVtApplication v1.0.0 using Java 25.0.3 with PID 69538 (/home/coding2fun/khekrn/gprc-benchmark/grpc-pg-bench/bin/spring-vt-bench.jar started by coding2fun in /home/coding2fun/khekrn/gprc-benchmark/grpc-pg-bench/scripts)
+2026-06-24T13:13:28.981+05:30  INFO 69538 --- [spring-vt-bench] [           main] com.beam.bench.SpringVtApplication       : No active profile set, falling back to 1 default profile: "default"
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::loadLibrary has been called by io.netty.util.internal.NativeLibraryUtil in an unnamed module (jar:nested:/home/coding2fun/khekrn/gprc-benchmark/grpc-pg-bench/bin/spring-vt-bench.jar/!BOOT-INF/lib/netty-common-4.2.15.Final.jar!/)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+2026-06-24T13:13:30.023+05:30  INFO 69538 --- [spring-vt-bench] [           main] com.beam.bench.GrpcServerConfig          : grpc-netty transport: epoll (io threads=1)
+2026-06-24T13:13:30.342+05:30  INFO 69538 --- [spring-vt-bench] [           main] o.s.grpc.server.NettyGrpcServerFactory   : Registered gRPC service: bench.v1.CommandService
+2026-06-24T13:13:30.343+05:30  INFO 69538 --- [spring-vt-bench] [           main] o.s.grpc.server.NettyGrpcServerFactory   : Registered gRPC service: grpc.reflection.v1.ServerReflection
+2026-06-24T13:13:30.343+05:30  INFO 69538 --- [spring-vt-bench] [           main] o.s.grpc.server.NettyGrpcServerFactory   : Registered gRPC service: grpc.health.v1.Health
+2026-06-24T13:13:30.448+05:30  INFO 69538 --- [spring-vt-bench] [           main] o.s.g.s.lifecycle.GrpcServerLifecycle    : gRPC Server started, listening on address: [/[0:0:0:0:0:0:0:0]:50056], port: 50056
+2026-06-24T13:13:30.454+05:30  INFO 69538 --- [spring-vt-bench] [           main] com.beam.bench.SpringVtApplication       : Started SpringVtApplication in 2.099 seconds (process running for 3.948)
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::arrayBaseOffset has been called by com.google.protobuf.UnsafeUtil (jar:nested:/home/coding2fun/khekrn/gprc-benchmark/grpc-pg-bench/bin/spring-vt-bench.jar/!BOOT-INF/lib/protobuf-java-4.34.2.jar!/)
+WARNING: Please consider reporting this to the maintainers of class com.google.protobuf.UnsafeUtil
+WARNING: sun.misc.Unsafe::arrayBaseOffset will be removed in a future release
+2026-06-24T13:13:31.784+05:30  INFO 69538 --- [spring-vt-bench] [     virtual-36] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-06-24T13:13:32.011+05:30  INFO 69538 --- [spring-vt-bench] [     virtual-36] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@4b2835f3
+2026-06-24T13:13:32.013+05:30  INFO 69538 --- [spring-vt-bench] [     virtual-36] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-06-24T13:13:57.750+05:30  INFO 69538 --- [spring-vt-bench] [ionShutdownHook] o.s.g.s.lifecycle.GrpcServerLifecycle    : Completed gRPC server shutdown
+2026-06-24T13:13:57.756+05:30  INFO 69538 --- [spring-vt-bench] [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...
+2026-06-24T13:13:57.759+05:30  INFO 69538 --- [spring-vt-bench] [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.
+2026-06-24T13:14:01.231+05:30  INFO 69697 --- [spring-vt-bench] [           main] com.beam.bench.SpringVtApplication       : Starting SpringVtApplication v1.0.0 using Java 25.0.3 with PID 69697 (/home/coding2fun/khekrn/gprc-benchmark/grpc-pg-bench/bin/spring-vt-bench.jar started by coding2fun in /home/coding2fun/khekrn/gprc-benchmark/grpc-pg-bench/scripts)
+2026-06-24T13:14:01.235+05:30  INFO 69697 --- [spring-vt-bench] [           main] com.beam.bench.SpringVtApplication       : No active profile set, falling back to 1 default profile: "default"
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::loadLibrary has been called by io.netty.util.internal.NativeLibraryUtil in an unnamed module (jar:nested:/home/coding2fun/khekrn/gprc-benchmark/grpc-pg-bench/bin/spring-vt-bench.jar/!BOOT-INF/lib/netty-common-4.2.15.Final.jar!/)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+2026-06-24T13:14:02.351+05:30  INFO 69697 --- [spring-vt-bench] [           main] com.beam.bench.GrpcServerConfig          : grpc-netty transport: epoll (io threads=1)
+2026-06-24T13:14:02.673+05:30  INFO 69697 --- [spring-vt-bench] [           main] o.s.grpc.server.NettyGrpcServerFactory   : Registered gRPC service: bench.v1.CommandService
+2026-06-24T13:14:02.674+05:30  INFO 69697 --- [spring-vt-bench] [           main] o.s.grpc.server.NettyGrpcServerFactory   : Registered gRPC service: grpc.reflection.v1.ServerReflection
+2026-06-24T13:14:02.674+05:30  INFO 69697 --- [spring-vt-bench] [           main] o.s.grpc.server.NettyGrpcServerFactory   : Registered gRPC service: grpc.health.v1.Health
+2026-06-24T13:14:02.790+05:30  INFO 69697 --- [spring-vt-bench] [           main] o.s.g.s.lifecycle.GrpcServerLifecycle    : gRPC Server started, listening on address: [/[0:0:0:0:0:0:0:0]:50056], port: 50056
+2026-06-24T13:14:02.796+05:30  INFO 69697 --- [spring-vt-bench] [           main] com.beam.bench.SpringVtApplication       : Started SpringVtApplication in 2.112 seconds (process running for 3.984)
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::arrayBaseOffset has been called by com.google.protobuf.UnsafeUtil (jar:nested:/home/coding2fun/khekrn/gprc-benchmark/grpc-pg-bench/bin/spring-vt-bench.jar/!BOOT-INF/lib/protobuf-java-4.34.2.jar!/)
+WARNING: Please consider reporting this to the maintainers of class com.google.protobuf.UnsafeUtil
+WARNING: sun.misc.Unsafe::arrayBaseOffset will be removed in a future release
+2026-06-24T13:14:04.080+05:30  INFO 69697 --- [spring-vt-bench] [     virtual-47] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-06-24T13:14:04.368+05:30  INFO 69697 --- [spring-vt-bench] [     virtual-47] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@484eb6a0
+2026-06-24T13:14:04.370+05:30  INFO 69697 --- [spring-vt-bench] [     virtual-47] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-06-24T13:14:30.053+05:30  INFO 69697 --- [spring-vt-bench] [ionShutdownHook] o.s.g.s.lifecycle.GrpcServerLifecycle    : Completed gRPC server shutdown
+2026-06-24T13:14:30.057+05:30  INFO 69697 --- [spring-vt-bench] [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...
+2026-06-24T13:14:30.064+05:30  INFO 69697 --- [spring-vt-bench] [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.
+2026-06-24T13:14:33.565+05:30  INFO 69860 --- [spring-vt-bench] [           main] com.beam.bench.SpringVtApplication       : Starting SpringVtApplication v1.0.0 using Java 25.0.3 with PID 69860 (/home/coding2fun/khekrn/gprc-benchmark/grpc-pg-bench/bin/spring-vt-bench.jar started by coding2fun in /home/coding2fun/khekrn/gprc-benchmark/grpc-pg-bench/scripts)
+2026-06-24T13:14:33.576+05:30  INFO 69860 --- [spring-vt-bench] [           main] com.beam.bench.SpringVtApplication       : No active profile set, falling back to 1 default profile: "default"
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::loadLibrary has been called by io.netty.util.internal.NativeLibraryUtil in an unnamed module (jar:nested:/home/coding2fun/khekrn/gprc-benchmark/grpc-pg-bench/bin/spring-vt-bench.jar/!BOOT-INF/lib/netty-common-4.2.15.Final.jar!/)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+2026-06-24T13:14:34.683+05:30  INFO 69860 --- [spring-vt-bench] [           main] com.beam.bench.GrpcServerConfig          : grpc-netty transport: epoll (io threads=1)
+2026-06-24T13:14:34.991+05:30  INFO 69860 --- [spring-vt-bench] [           main] o.s.grpc.server.NettyGrpcServerFactory   : Registered gRPC service: bench.v1.CommandService
+2026-06-24T13:14:34.992+05:30  INFO 69860 --- [spring-vt-bench] [           main] o.s.grpc.server.NettyGrpcServerFactory   : Registered gRPC service: grpc.reflection.v1.ServerReflection
+2026-06-24T13:14:34.992+05:30  INFO 69860 --- [spring-vt-bench] [           main] o.s.grpc.server.NettyGrpcServerFactory   : Registered gRPC service: grpc.health.v1.Health
+2026-06-24T13:14:35.087+05:30  INFO 69860 --- [spring-vt-bench] [           main] o.s.g.s.lifecycle.GrpcServerLifecycle    : gRPC Server started, listening on address: [/[0:0:0:0:0:0:0:0]:50056], port: 50056
+2026-06-24T13:14:35.091+05:30  INFO 69860 --- [spring-vt-bench] [           main] com.beam.bench.SpringVtApplication       : Started SpringVtApplication in 2.12 seconds (process running for 3.98)
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::arrayBaseOffset has been called by com.google.protobuf.UnsafeUtil (jar:nested:/home/coding2fun/khekrn/gprc-benchmark/grpc-pg-bench/bin/spring-vt-bench.jar/!BOOT-INF/lib/protobuf-java-4.34.2.jar!/)
+WARNING: Please consider reporting this to the maintainers of class com.google.protobuf.UnsafeUtil
+WARNING: sun.misc.Unsafe::arrayBaseOffset will be removed in a future release
+2026-06-24T13:14:36.365+05:30  INFO 69860 --- [spring-vt-bench] [     virtual-83] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-06-24T13:14:36.610+05:30  INFO 69860 --- [spring-vt-bench] [     virtual-83] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@127e6dc2
+2026-06-24T13:14:36.612+05:30  INFO 69860 --- [spring-vt-bench] [     virtual-83] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-06-24T13:15:02.358+05:30  INFO 69860 --- [spring-vt-bench] [ionShutdownHook] o.s.g.s.lifecycle.GrpcServerLifecycle    : Completed gRPC server shutdown
+2026-06-24T13:15:02.364+05:30  INFO 69860 --- [spring-vt-bench] [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...
+2026-06-24T13:15:02.375+05:30  INFO 69860 --- [spring-vt-bench] [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.
+2026-06-24T13:15:05.833+05:30  INFO 70050 --- [spring-vt-bench] [           main] com.beam.bench.SpringVtApplication       : Starting SpringVtApplication v1.0.0 using Java 25.0.3 with PID 70050 (/home/coding2fun/khekrn/gprc-benchmark/grpc-pg-bench/bin/spring-vt-bench.jar started by coding2fun in /home/coding2fun/khekrn/gprc-benchmark/grpc-pg-bench/scripts)
+2026-06-24T13:15:05.840+05:30  INFO 70050 --- [spring-vt-bench] [           main] com.beam.bench.SpringVtApplication       : No active profile set, falling back to 1 default profile: "default"
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::loadLibrary has been called by io.netty.util.internal.NativeLibraryUtil in an unnamed module (jar:nested:/home/coding2fun/khekrn/gprc-benchmark/grpc-pg-bench/bin/spring-vt-bench.jar/!BOOT-INF/lib/netty-common-4.2.15.Final.jar!/)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+2026-06-24T13:15:06.960+05:30  INFO 70050 --- [spring-vt-bench] [           main] com.beam.bench.GrpcServerConfig          : grpc-netty transport: epoll (io threads=1)
+2026-06-24T13:15:07.272+05:30  INFO 70050 --- [spring-vt-bench] [           main] o.s.grpc.server.NettyGrpcServerFactory   : Registered gRPC service: bench.v1.CommandService
+2026-06-24T13:15:07.273+05:30  INFO 70050 --- [spring-vt-bench] [           main] o.s.grpc.server.NettyGrpcServerFactory   : Registered gRPC service: grpc.reflection.v1.ServerReflection
+2026-06-24T13:15:07.273+05:30  INFO 70050 --- [spring-vt-bench] [           main] o.s.grpc.server.NettyGrpcServerFactory   : Registered gRPC service: grpc.health.v1.Health
+2026-06-24T13:15:07.390+05:30  INFO 70050 --- [spring-vt-bench] [           main] o.s.g.s.lifecycle.GrpcServerLifecycle    : gRPC Server started, listening on address: [/[0:0:0:0:0:0:0:0]:50056], port: 50056
+2026-06-24T13:15:07.397+05:30  INFO 70050 --- [spring-vt-bench] [           main] com.beam.bench.SpringVtApplication       : Started SpringVtApplication in 2.128 seconds (process running for 3.983)
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::arrayBaseOffset has been called by com.google.protobuf.UnsafeUtil (jar:nested:/home/coding2fun/khekrn/gprc-benchmark/grpc-pg-bench/bin/spring-vt-bench.jar/!BOOT-INF/lib/protobuf-java-4.34.2.jar!/)
+WARNING: Please consider reporting this to the maintainers of class com.google.protobuf.UnsafeUtil
+WARNING: sun.misc.Unsafe::arrayBaseOffset will be removed in a future release
+2026-06-24T13:15:08.720+05:30  INFO 70050 --- [spring-vt-bench] [    virtual-148] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-06-24T13:15:08.979+05:30  INFO 70050 --- [spring-vt-bench] [    virtual-148] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@bab66c4
+2026-06-24T13:15:08.981+05:30  INFO 70050 --- [spring-vt-bench] [    virtual-148] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-06-24T13:15:34.678+05:30  INFO 70050 --- [spring-vt-bench] [ionShutdownHook] o.s.g.s.lifecycle.GrpcServerLifecycle    : Completed gRPC server shutdown
+2026-06-24T13:15:34.687+05:30  INFO 70050 --- [spring-vt-bench] [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...
+2026-06-24T13:15:34.699+05:30  INFO 70050 --- [spring-vt-bench] [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.
+2026-06-24T13:15:38.163+05:30  INFO 70230 --- [spring-vt-bench] [           main] com.beam.bench.SpringVtApplication       : Starting SpringVtApplication v1.0.0 using Java 25.0.3 with PID 70230 (/home/coding2fun/khekrn/gprc-benchmark/grpc-pg-bench/bin/spring-vt-bench.jar started by coding2fun in /home/coding2fun/khekrn/gprc-benchmark/grpc-pg-bench/scripts)
+2026-06-24T13:15:38.168+05:30  INFO 70230 --- [spring-vt-bench] [           main] com.beam.bench.SpringVtApplication       : No active profile set, falling back to 1 default profile: "default"
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::loadLibrary has been called by io.netty.util.internal.NativeLibraryUtil in an unnamed module (jar:nested:/home/coding2fun/khekrn/gprc-benchmark/grpc-pg-bench/bin/spring-vt-bench.jar/!BOOT-INF/lib/netty-common-4.2.15.Final.jar!/)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+2026-06-24T13:15:39.319+05:30  INFO 70230 --- [spring-vt-bench] [           main] com.beam.bench.GrpcServerConfig          : grpc-netty transport: epoll (io threads=1)
+2026-06-24T13:15:39.623+05:30  INFO 70230 --- [spring-vt-bench] [           main] o.s.grpc.server.NettyGrpcServerFactory   : Registered gRPC service: bench.v1.CommandService
+2026-06-24T13:15:39.624+05:30  INFO 70230 --- [spring-vt-bench] [           main] o.s.grpc.server.NettyGrpcServerFactory   : Registered gRPC service: grpc.reflection.v1.ServerReflection
+2026-06-24T13:15:39.624+05:30  INFO 70230 --- [spring-vt-bench] [           main] o.s.grpc.server.NettyGrpcServerFactory   : Registered gRPC service: grpc.health.v1.Health
+2026-06-24T13:15:39.733+05:30  INFO 70230 --- [spring-vt-bench] [           main] o.s.g.s.lifecycle.GrpcServerLifecycle    : gRPC Server started, listening on address: [/[0:0:0:0:0:0:0:0]:50056], port: 50056
+2026-06-24T13:15:39.739+05:30  INFO 70230 --- [spring-vt-bench] [           main] com.beam.bench.SpringVtApplication       : Started SpringVtApplication in 2.144 seconds (process running for 4.002)
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::arrayBaseOffset has been called by com.google.protobuf.UnsafeUtil (jar:nested:/home/coding2fun/khekrn/gprc-benchmark/grpc-pg-bench/bin/spring-vt-bench.jar/!BOOT-INF/lib/protobuf-java-4.34.2.jar!/)
+WARNING: Please consider reporting this to the maintainers of class com.google.protobuf.UnsafeUtil
+WARNING: sun.misc.Unsafe::arrayBaseOffset will be removed in a future release
+2026-06-24T13:15:41.075+05:30  INFO 70230 --- [spring-vt-bench] [    virtual-253] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-06-24T13:15:41.341+05:30  INFO 70230 --- [spring-vt-bench] [    virtual-253] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@28126d2
+2026-06-24T13:15:41.344+05:30  INFO 70230 --- [spring-vt-bench] [    virtual-253] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-06-24T13:16:07.031+05:30  INFO 70230 --- [spring-vt-bench] [ionShutdownHook] o.s.g.s.lifecycle.GrpcServerLifecycle    : Completed gRPC server shutdown
+2026-06-24T13:16:07.037+05:30  INFO 70230 --- [spring-vt-bench] [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...
+2026-06-24T13:16:07.046+05:30  INFO 70230 --- [spring-vt-bench] [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.

@@ -1,5 +1,6 @@
-# Tune the release build for the local CPU (M1 Pro / aarch64). This unlocks
-# NEON-tuned codegen for the actual core that will run the server.
-# `+lse` is safe on any ARMv8.1+ chip and is what the M-series supports.
+# Tune the release build for the local CPU. The benchmark box is an x86_64
+# AMD Ryzen; `target-cpu=native` lets LLVM use the host's full ISA (AVX2 etc.)
+# since the binary only ever runs on the machine that built it. Harmless and
+# equally correct on aarch64 (it would target the local ARM core instead).
 [build]
 rustflags = ["-C", "target-cpu=native"]

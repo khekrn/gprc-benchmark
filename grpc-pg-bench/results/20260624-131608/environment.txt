@@ -1,0 +1,22 @@
+timestamp: 20260624-131608
+stacks: go-pgx rust-tokio spring-vt
+concurrency_levels: 1 8 32 64 128
+warmup: 8s  duration: 18s  payload: 256B  client_conns: 4
+loadgen_mode: exectx  read_pct: 20  keyspace: 10000
+pg_pool: min=4 max=32
+server_cpus: 2,3  client_cpus: 4,5  mem_max: 4G
+gomaxprocs: 2  vertx_event_loops: 2  jvm_opts: -Xms2048m -Xmx2048m -XX:+UseZGC -XX:+AlwaysPreTouch
+--- uname ---
+Linux coding2fun-ThinkPad-E14-Gen-6 7.0.0-22-generic #22-Ubuntu SMP PREEMPT_DYNAMIC Mon May 25 15:54:34 UTC 2026 x86_64 GNU/Linux
+--- cpu ---
+CPU(s):                                  12
+On-line CPU(s) list:                     0-11
+Model name:                              AMD Ryzen 5 7535HS with Radeon Graphics
+CPU(s) scaling MHz:                      49%
+CPU max MHz:                             4604.7568
+CPU min MHz:                             416.0930
+NUMA node0 CPU(s):                       0-11
+--- mem ---
+               total        used        free      shared  buff/cache   available
+Mem:            13Gi       2.3Gi       4.1Gi       181Mi       8.0Gi        11Gi
+Swap:          4.0Gi       4.0Ki       4.0Gi

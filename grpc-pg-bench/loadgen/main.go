@@ -7,6 +7,8 @@
 // Modes:
 //   execute  (default) — single autocommit INSERT per call
 //   exectx             — multi-statement transaction per call (3 INSERTs)
+//   read               — 100% GetState (pure read; requires pre-populated
+//                        workflow_state, see scripts/run_benchmark.sh seeding)
 //   mixed              — per-iteration coin flip: ExecuteTx vs GetState
 //                        with `-read-pct` reads (default 20%)
 package main
@@ -38,15 +40,15 @@ func main() {
 	conns := flag.Int("conns", 4, "number of gRPC client connections (channels)")
 	label := flag.String("label", "", "label for the result (e.g. go-pgx, kotlin-vertx)")
 	out := flag.String("out", "", "optional path to write JSON result")
-	mode := flag.String("mode", "execute", "workload: execute | exectx | mixed")
+	mode := flag.String("mode", "execute", "workload: execute | exectx | read | mixed")
 	readPct := flag.Int("read-pct", 20, "percent reads in mixed mode (0..100)")
 	keyspace := flag.Int("keyspace", 10000, "per-worker workflow_id pool size")
 	flag.Parse()
 
 	switch *mode {
-	case "execute", "exectx", "mixed":
+	case "execute", "exectx", "read", "mixed":
 	default:
-		fmt.Fprintf(os.Stderr, "invalid -mode %q (use execute|exectx|mixed)\n", *mode)
+		fmt.Fprintf(os.Stderr, "invalid -mode %q (use execute|exectx|read|mixed)\n", *mode)
 		os.Exit(2)
 	}
 	if *readPct < 0 || *readPct > 100 {
@@ -210,9 +212,11 @@ func runPhase(cfg phaseConfig) Result {
 				}
 				seq++
 
-				// Decide op for this iteration. In mixed mode, treat -read-pct
-				// as the percentage of reads; everything else is a write.
-				isRead := cfg.mode == "mixed" && rng.Intn(100) < cfg.readPct
+				// Decide op for this iteration. read mode is 100% GetState; in
+				// mixed mode, treat -read-pct as the percentage of reads;
+				// everything else is a write.
+				isRead := cfg.mode == "read" ||
+					(cfg.mode == "mixed" && rng.Intn(100) < cfg.readPct)
 
 				// Workflow id: bounded per-worker keyspace so:
 				//  - ExecuteTx's UPSERT exercises both INSERT and UPDATE paths

@@ -1,0 +1,2 @@
+stack,mode,c,rps,p50_ms,p90_ms,p99_ms,p999_ms,max_ms,total_ok,total_err
+go-pgx,execute,64,10081,5.749,9.822,12.740,45.665,3512.878,18145497,0
