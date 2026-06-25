@@ -35,6 +35,8 @@ behaves under continuous load over time.
   `JdbcClient`** over HikariCP. Blocking code on Loom (no reactive). Config: epoll
   transport, a single Netty I/O thread, ZGC + 2 GB heap, pool 32. (How that config
   was arrived at — profiling + A/Bs — is in [`spring-vt/PROFILING.md`](spring-vt/PROFILING.md).)
+  It also co-hosts a **REST `/health` endpoint on Jetty** in the same JVM — see
+  [Co-hosting REST + gRPC](#co-hosting-rest--grpc-in-one-service-spring-vt).
 - **spring-data-jdbc** — spring-vt with the data layer swapped to **Spring Data
   JDBC** repositories (entities + `CrudRepository` + a `@Modifying` upsert).
   Everything else identical: same VT model, same HikariCP pool (32), same
@@ -262,6 +264,47 @@ design — partitioning / retention for append tables, or a checkpoint-style sta
 model (bounded, HOT-updated rows) that keeps the working set cache-resident. Get
 that right and any of these three runtimes will serve the engine well.
 
+## Co-hosting REST + gRPC in one service (spring-vt)
+
+A workflow engine usually needs an HTTP surface too (k8s probes, admin/ops
+endpoints) next to its gRPC hot path. So we gave spring-vt a **second network
+stack in the same JVM**: a Spring MVC REST server on **Jetty** (Tomcat excluded —
+lighter, fewer threads) exposing a plain `GET /health` → `200` liveness endpoint,
+co-hosted with the existing grpc-netty server. The question: on a 2-core box, does
+running two servers in one process starve either one?
+
+We re-ran the 30-min `execute` soak (c=64, pool=32) with spring-vt now serving
+**both** gRPC (:50056) and REST (:8080), while an **external** probe pinged
+`/health` every 5 s from a third core pair (a bystander to both server and
+loadgen). This run also adopted a production-shaped JVM tune (`-Xmx2304m`, ZGC
+`ConcGCThreads=1`, `+UseCompactObjectHeaders`, `MaxDirectMemorySize=768m`, pooled
+Netty buffers), so the delta below reflects the second server **and** the JVM
+change together.
+
+| metric | gRPC only (baseline) | **+ REST co-hosted** | Δ |
+|--------|---------------------:|---------------------:|----:|
+| gRPC req/s | 11,171 | **10,934** | **−2.1%** |
+| gRPC p99 | 12.01 ms | 11.96 ms | flat |
+| gRPC p99.9 | 54.5 ms | **39.7 ms** | −27% |
+| gRPC errors | 0 | **0** | — |
+| `/health` p50 / p99 / max | — | **4.0 / 11.5 / 24 ms** | — |
+| `/health` non-200 under load | — | **0** | — |
+| total platform threads | ~33 | **36** | +~3 |
+
+**Co-hosting is cheap here.** Throughput cost was ~2% (and that conflates the JVM
+re-tune; the GC change actually *improved* the tail — p99.9 dropped 27%). Under
+full gRPC saturation (both cores ~187% busy, 10,934 req/s), the REST `/health`
+probe stayed at single-digit-ms p50 with a p99 of 11.5 ms and **zero stalls** —
+the two servers don't starve each other. The thread count barely moved: with
+virtual threads on, Jetty routes requests through its `VirtualThreadPool`, so it
+adds only a `MasterPoller` + acceptor (~3 platform threads), versus Tomcat's
+default 200-thread ceiling. The gRPC server staying at ~187% (not pinned 200%)
+confirms `execute` remains DB-round-trip bound, not CPU-walled, even with the
+second stack present.
+
+*Reproduce:* build spring-vt, then `STACKS=spring-vt bash scripts/soak_3stacks.sh`
+(serves both servers) with `bash scripts/health_ping.sh` running alongside.
+
 ## Caveats (read before trusting any single number)
 
 - **n = 1 per stack** — one 30-minute run each (spring-data-jdbc has n = 2,
@@ -286,9 +329,9 @@ sql/schema.sql          commands + workflow_state + outbox
 go-pgx/                 Go server (raw pgx)
 go-gorm/                Go server, GORM ORM over pgx (modular: config/db/service/server/...)
 rust-tokio/             Rust server (modular src/)
-spring-vt/              Spring Boot gRPC + virtual threads + JdbcClient  (+ PROFILING.md)
+spring-vt/              Spring Boot gRPC + virtual threads + JdbcClient + Jetty REST /health  (+ PROFILING.md)
 spring-data-jdbc/       Spring Boot gRPC + virtual threads + Spring Data JDBC repositories
 loadgen/                shared Go load generator
-scripts/                build_* , soak_3stacks.sh , run_benchmark.sh
+scripts/                build_* , soak_3stacks.sh , run_benchmark.sh , health_ping.sh
 results/                JSON + summary.csv per run
 ```

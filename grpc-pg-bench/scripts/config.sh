@@ -24,6 +24,10 @@ export GO_GORM_ADDR="${GO_GORM_ADDR:-127.0.0.1:50054}"
 export SPRING_VT_HOST="${SPRING_VT_HOST:-127.0.0.1}"
 export SPRING_VT_PORT="${SPRING_VT_PORT:-50056}"
 export SPRING_VT_ADDR="${SPRING_VT_HOST}:${SPRING_VT_PORT}"
+# spring-vt also now exposes a REST /health endpoint on a SECOND server (Jetty),
+# co-hosted in the same JVM. This is its HTTP port (gRPC stays on SPRING_VT_PORT).
+# The external health pinger (scripts/health_ping.sh) hits http://host:PORT/health.
+export SPRING_VT_HTTP_PORT="${SPRING_VT_HTTP_PORT:-8080}"
 # Spring Boot gRPC + Kotlin coroutines + R2DBC (reactive).
 export SPRING_RT_HOST="${SPRING_RT_HOST:-127.0.0.1}"
 export SPRING_RT_PORT="${SPRING_RT_PORT:-50058}"
@@ -78,6 +82,23 @@ export JVM_OPTS="${JVM_OPTS:--Xms512m -Xmx1024m -XX:+UseZGC -XX:+AlwaysPreTouch}
 # JVM stacks), so cross-stack comparisons against spring-rt carry that caveat.
 # The epoll transport + directExecutor live in spring-rt's GrpcServerConfig.
 export SPRING_RT_JVM_OPTS="${SPRING_RT_JVM_OPTS:-${JVM_OPTS} -XX:+UseCompactObjectHeaders}"
+# spring-vt now co-hosts a REST (Jetty) server alongside gRPC, so it gets a
+# production-shaped, stack-specific JVM tune (NOT the shared JVM_OPTS):
+#   -Xms/-Xmx 2304m  fixed heap; with MaxDirectMemorySize 768m that's ~3 GB,
+#                    leaving ~1 GB for OS + metaspace + native on the 4 GB box.
+#   ConcGCThreads=1  pin ZGC's concurrent work to one thread — protects the
+#                    2-vCPU budget (GC can't steal both cores from the handlers).
+#   UseCompactObjectHeaders  JEP 519, 12->8 B headers (product flag on JDK 25).
+#   MaxDirectMemorySize=768m caps Netty's pooled direct buffers (both servers).
+#   -Dio.netty.allocator.type=pooled  Netty's default already, set explicitly so
+#                    it's pinned regardless of platform heuristics. NOTE: this is
+#                    a Netty *system property*; it only works as a -D JVM arg, NOT
+#                    in application.properties (Spring doesn't export keys to
+#                    System.getProperty), which is why it lives here.
+# Because this differs from the JVM_OPTS the original 11,973-rps baseline ran
+# under, the co-host gRPC number vs that baseline reflects BOTH the second server
+# AND this JVM tune — the health-pinger stall signal is the cleaner co-host probe.
+export SPRING_VT_JVM_OPTS="${SPRING_VT_JVM_OPTS:--Xms2304m -Xmx2304m -XX:+UseZGC -XX:ConcGCThreads=1 -XX:MaxDirectMemorySize=768m -XX:+AlwaysPreTouch -XX:+UseCompactObjectHeaders -Dio.netty.allocator.type=pooled}"
 export VERTX_EVENT_LOOPS="${VERTX_EVENT_LOOPS:-2}"
 
 # Connection pool size (identical for both stacks)

@@ -20,6 +20,12 @@ export PG_POOL_MAX=32 PG_POOL_MIN=4
 JVM_OPTS=(-Xms2048m -Xmx2048m -XX:+UseZGC -XX:+AlwaysPreTouch)
 # spring-rt (reactive Spring Data R2DBC) adds compact object headers (JEP 519).
 SPRING_RT_JVM_OPTS=("${JVM_OPTS[@]}" -XX:+UseCompactObjectHeaders)
+# spring-vt now co-hosts REST (Jetty) + gRPC, so it gets a production-shaped tune:
+# fixed 2304m heap + 768m direct (≈3 GB, leaves ~1 GB for OS/native), ZGC capped
+# to 1 concurrent thread (protect the 2 vCPU), compact headers, pooled Netty bufs.
+SPRING_VT_JVM_OPTS=(-Xms2304m -Xmx2304m -XX:+UseZGC -XX:ConcGCThreads=1
+  -XX:MaxDirectMemorySize=768m -XX:+AlwaysPreTouch -XX:+UseCompactObjectHeaders
+  -Dio.netty.allocator.type=pooled)
 C="${C:-64}"
 PER_MODE_DUR="${PER_MODE_DUR:-30m}"
 WARMUP="${WARMUP:-30s}"
@@ -59,7 +65,7 @@ start_server(){
     go-pgx)     PORT=50051; LISTEN_ADDR=127.0.0.1:$PORT GOMAXPROCS=2 taskset -c 2,3 "$ROOT/bin/go-server"   >"$OUT/$1.server.log" 2>&1 & SRV_PID=$! ;;
     go-gorm)    PORT=50054; LISTEN_ADDR=127.0.0.1:$PORT GOMAXPROCS=2 taskset -c 2,3 "$ROOT/bin/go-gorm-server" >"$OUT/$1.server.log" 2>&1 & SRV_PID=$! ;;
     rust-tokio) PORT=50053; LISTEN_ADDR=127.0.0.1:$PORT RUST_WORKER_THREADS=2 taskset -c 2,3 "$ROOT/bin/rust-server" >"$OUT/$1.server.log" 2>&1 & SRV_PID=$! ;;
-    spring-vt)  PORT=50056; taskset -c 2,3 java "${JVM_OPTS[@]}" -jar "$ROOT/bin/spring-vt-bench.jar" >"$OUT/$1.server.log" 2>&1 & SRV_PID=$! ;;
+    spring-vt)  PORT=50056; HTTP_PORT="${SPRING_VT_HTTP_PORT:-8080}" LISTEN_PORT=$PORT taskset -c 2,3 java "${SPRING_VT_JVM_OPTS[@]}" -jar "$ROOT/bin/spring-vt-bench.jar" >"$OUT/$1.server.log" 2>&1 & SRV_PID=$! ;;
     spring-data-jdbc) PORT=50060; taskset -c 2,3 java "${JVM_OPTS[@]}" -jar "$ROOT/bin/spring-data-jdbc-bench.jar" >"$OUT/$1.server.log" 2>&1 & SRV_PID=$! ;;
     spring-rt)  PORT=50058; taskset -c 2,3 java "${SPRING_RT_JVM_OPTS[@]}" -jar "$ROOT/bin/spring-rt-bench.jar" >"$OUT/$1.server.log" 2>&1 & SRV_PID=$! ;;
   esac

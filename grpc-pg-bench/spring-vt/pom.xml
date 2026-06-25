@@ -40,6 +40,28 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-grpc-server</artifactId>
     </dependency>
+    <!-- REST endpoint (Spring MVC) on a SEPARATE servlet container, so this one
+         JVM now runs TWO network stacks: grpc-netty (above) AND an HTTP server.
+         We deliberately swap Tomcat out for Jetty: Jetty's QueuedThreadPool is
+         leaner and, tuned to a small min/max, keeps the extra platform-thread
+         count low on the 2-core box — the whole point of the co-host experiment
+         is to add that second stack as cheaply as possible. Excluding
+         spring-boot-starter-tomcat then adding spring-boot-starter-jetty is the
+         canonical Boot servlet-container swap. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>org.springframework.boot</groupId>
+          <artifactId>spring-boot-starter-tomcat</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-jetty</artifactId>
+    </dependency>
     <!-- Blocking JDBC + HikariCP (default Boot pool). -->
     <dependency>
       <groupId>org.springframework.boot</groupId>

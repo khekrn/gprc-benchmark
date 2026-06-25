@@ -36,8 +36,8 @@ rust-tokio/                    # Cargo — Rust/tonic + tokio-postgres + deadpoo
   src/                              # main/config/proto/fnv/db/service/server (one concern per file)
 kotlin-vertx/                  # Maven — Kotlin/Vert.x reactive (Java 25, Kotlin 2.2.x)
   src/main/kotlin/com/beam/bench/   # Main/MainVerticle/GrpcVerticle/CommandServiceImpl/Db/Config/Fnv
-spring-vt/                     # Maven — Spring Boot 4.1 gRPC + virtual threads + HikariCP JDBC
-  src/main/java/com/beam/bench/     # CommandServiceImpl (StreamObserver), Db (JDBC), GrpcServerConfig (VT executor), Fnv
+spring-vt/                     # Maven — Spring Boot 4.1 gRPC + virtual threads + HikariCP JDBC + co-hosted Jetty REST /health
+  src/main/java/com/beam/bench/     # CommandServiceImpl (StreamObserver), Db (JDBC), GrpcServerConfig (VT executor), HealthController (REST), Fnv
 spring-rt/                     # Maven — Spring Boot 4.1 gRPC + Kotlin coroutines + Spring Data R2DBC (reactive; epoll + direct executor)
   src/main/kotlin/com/beam/bench/   # CommandServiceImpl (CoroutineImplBase suspend), Db (@Component, CoroutineCrudRepositories), Command/WorkflowState/OutboxEvent (@Table) + Repositories (@Modifying upsert), GrpcServerConfig (epoll + directExecutor, NO VT executor), Fnv, SpringRtApplication
 spring-kt-vt/                   # Maven — Spring Boot 4.1 gRPC + Kotlin + virtual threads + Exposed DSL/JDBC (tuned for c=128)
@@ -297,6 +297,33 @@ WARMUP=15s DURATION=60s ./scripts/run_benchmark.sh
   `builder.executor(Executors.newVirtualThreadPerTaskExecutor())` — verified via
   `jcmd Thread.print` that handlers (and thus the blocking JDBC) run on virtual
   threads.
+- **spring-vt co-hosts a REST `/health` endpoint on Jetty (the only stack that
+  runs two network stacks in one JVM).** `spring-boot-starter-web` with Tomcat
+  *excluded* + `spring-boot-starter-jetty` adds a Spring MVC servlet container
+  alongside grpc-netty; `HealthController` serves a plain `200 "UP"` liveness (no
+  DB, no Actuator — Actuator's DataSource check would borrow a HikariCP conn per
+  ping and muddy the co-host signal). Jetty binds `server.port` = `${HTTP_PORT:8080}`;
+  gRPC stays on `spring.grpc.server.port`. With virtual threads on, Jetty routes
+  requests via its `VirtualThreadPool`, so it adds only ~3 platform threads
+  (MasterPoller + acceptor), NOT a `qtp` worker pool — that's why we picked Jetty
+  over Tomcat (whose default is max-threads=200). NOTE two inert keys in
+  `application.properties`, kept as the user wrote them: (1)
+  `spring.grpc.server.netty.boss-threads/worker-threads` are dead — `GrpcServerConfig`'s
+  `ServerBuilderCustomizer` builds the event-loop groups directly and overrides
+  property-based config (it already runs boss=1/worker=cores/2=1 on the
+  `taskset -c 2,3` pin); (2) `io.netty.allocator.type=pooled` is a Netty *system*
+  property that only works as a `-D` JVM arg (set in `SPRING_VT_JVM_OPTS`), not
+  from `application.properties`. **spring-vt has its own `SPRING_VT_JVM_OPTS`**
+  (config.sh + the soak array): `-Xms/-Xmx2304m`, ZGC `ConcGCThreads=1` (protect
+  the 2 vCPU), `+UseCompactObjectHeaders`, `MaxDirectMemorySize=768m`,
+  `-Dio.netty.allocator.type=pooled` — a *different* JVM tune than the shared
+  `JVM_OPTS` the original 11,973-rps baseline ran under, so the co-host number
+  conflates the second server + the JVM change (≤2% total; the GC change improved
+  the tail). The external probe is `scripts/health_ping.sh` (curl `/health` every
+  5s, pinned to free cores, latency CSV + p50/p99/max summary); run it *alongside*
+  the soak. Co-host result: −2.1% gRPC rps, p99 flat, p99.9 −27%, 0 errors, and
+  `/health` p99 11.5 ms with 0 stalls under full gRPC saturation. README has the
+  table under "Co-hosting REST + gRPC in one service".
 - **Raw SQL everywhere; only the placeholder syntax differs.** The reactive
   stacks use `$1`-style (vertx-pg-client); the JDBC stacks use `?` (pgjdbc).
   Statements/plans are identical. JDBC stacks pass `prepareThreshold=1` so

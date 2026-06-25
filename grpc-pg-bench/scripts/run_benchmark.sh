@@ -155,11 +155,12 @@ start_server() {
       TARGET_ADDR="${RUST_ADDR}"
       ;;
     spring-vt)
-      # Spring Boot executable jar; reads LISTEN_PORT for spring.grpc.server.port.
+      # Spring Boot executable jar; reads LISTEN_PORT for spring.grpc.server.port
+      # and HTTP_PORT for the co-hosted Jetty REST server (server.port).
       # shellcheck disable=SC2086
-      LISTEN_HOST="${SPRING_VT_HOST}" LISTEN_PORT="${SPRING_VT_PORT}" \
+      LISTEN_HOST="${SPRING_VT_HOST}" LISTEN_PORT="${SPRING_VT_PORT}" HTTP_PORT="${SPRING_VT_HTTP_PORT}" \
         ${memcap[@]+"${memcap[@]}"} \
-        ${SERVER_PIN[@]+"${SERVER_PIN[@]}"} java ${JVM_OPTS} -jar "${ROOT_DIR}/bin/spring-vt-bench.jar" \
+        ${SERVER_PIN[@]+"${SERVER_PIN[@]}"} java ${SPRING_VT_JVM_OPTS} -jar "${ROOT_DIR}/bin/spring-vt-bench.jar" \
         >> "${RUN_DIR}/${stack}.server.log" 2>&1 &
       SERVER_PID=$!
       wait_for_port "${SPRING_VT_HOST}" "${SPRING_VT_PORT}"
