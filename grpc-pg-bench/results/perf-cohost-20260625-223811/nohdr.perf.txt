@@ -1,0 +1,16 @@
+
+ Performance counter stats for process id '15380':
+
+    70,524,114,522      instructions                                                            (83.34%)
+   161,741,881,612      cycles                                                                  (83.40%)
+     9,582,234,891      cache-references                                                        (83.31%)
+     2,038,471,701      cache-misses                                                            (83.24%)
+           623,040      context-switches                                                      
+            25,713      cpu-migrations                                                        
+    26,150,871,384      L1-dcache-loads                                                         (83.44%)
+     3,243,307,070      L1-dcache-load-misses                                                   (83.28%)
+   <not supported>      LLC-loads                                                             
+   <not supported>      LLC-load-misses                                                       
+
+      28.004653203 seconds time elapsed
+

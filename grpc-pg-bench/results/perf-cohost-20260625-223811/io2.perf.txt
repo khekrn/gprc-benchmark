@@ -1,0 +1,16 @@
+
+ Performance counter stats for process id '15601':
+
+    81,796,386,202      instructions                                                            (83.29%)
+   180,192,091,704      cycles                                                                  (83.35%)
+    11,271,671,112      cache-references                                                        (83.20%)
+     2,513,974,838      cache-misses                                                            (83.32%)
+           491,151      context-switches                                                      
+             7,113      cpu-migrations                                                        
+    29,649,001,299      L1-dcache-loads                                                         (83.34%)
+     3,771,386,932      L1-dcache-load-misses                                                   (83.52%)
+   <not supported>      LLC-loads                                                             
+   <not supported>      LLC-load-misses                                                       
+
+      28.005330389 seconds time elapsed
+

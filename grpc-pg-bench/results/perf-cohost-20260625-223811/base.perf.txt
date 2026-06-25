@@ -1,0 +1,16 @@
+
+ Performance counter stats for process id '15084':
+
+    86,187,388,163      instructions                                                            (83.22%)
+   183,507,456,274      cycles                                                                  (83.40%)
+    11,400,764,066      cache-references                                                        (83.40%)
+     2,328,872,174      cache-misses                                                            (83.32%)
+           555,475      context-switches                                                      
+            14,257      cpu-migrations                                                        
+    30,966,710,194      L1-dcache-loads                                                         (83.31%)
+     3,886,861,031      L1-dcache-load-misses                                                   (83.35%)
+   <not supported>      LLC-loads                                                             
+   <not supported>      LLC-load-misses                                                       
+
+      28.004866221 seconds time elapsed
+
