@@ -319,24 +319,45 @@ The co-host run uses a production-shaped, spring-vt-specific JVM tune
 -Dio.netty.allocator.type=pooled
 ```
 
-Plus **1 Netty I/O thread** (`GrpcServerConfig`, `cores/2` on the 2-core pin). We
-verified the two cache-relevant choices with a hardware-counter A/B (`perf stat`,
+Plus **1 Netty I/O thread** — set in `GrpcServerConfig`, not via a JVM flag.
+
+> **"1 I/O thread" is a Netty knob, not a GC knob — they are different things.**
+> This JVM runs several distinct thread pools; the two we tuned to "1" are unrelated:
+>
+> - **Netty I/O (worker) event-loop thread** — `NETTY_IO_THREADS`, defaults to
+>   `cores/2` = **1** on the 2-core pin. `GrpcServerConfig` builds the
+>   `MultiThreadIoEventLoopGroup` *worker* group with this size; it does socket I/O
+>   + HTTP/2 framing. (A separate **boss** group is always 1, for accepting
+>   connections.) This is the thread the A/B's `io2` cell doubled to 2.
+> - **ZGC concurrent GC thread** — `-XX:ConcGCThreads=1`, the garbage collector's
+>   concurrent worker count, capped to 1 so GC can't grab both vCPUs. This is a
+>   *JVM/GC* setting and was **held constant across all four A/B cells** — the A/B
+>   never varied GC.
+> - **Request handlers** run on **virtual threads** (not a fixed pool), and the
+>   co-hosted **Jetty** REST server adds only a `MasterPoller` + acceptor (~3
+>   platform threads). Neither is the "I/O thread" referred to here.
+>
+> So "1 I/O thread vs 2" below means **1 vs 2 Netty worker event loops**, with GC
+> (`ConcGCThreads=1`) and everything else identical.
+
+We verified the two cache-relevant choices with a hardware-counter A/B (`perf stat`,
 matched ~18k rps, repeat cell agrees to 0.25% so >0.5% deltas are real —
 [`results/perf-cohost2-*/FINDINGS.md`](results/perf-cohost2-20260625-224525/FINDINGS.md)):
 
 | setting | vs alternative | cache-misses / instr | IPC | context switches |
 |---|---|--:|--:|--:|
-| **compact headers ON** | vs OFF | **−2.0%** (L1 −3.1%) | **+1.0%** | flat |
-| **1 I/O thread** | vs 2 | **−10%** (80→73 M/s) | **+6%** (0.45→0.48) | flat |
+| **compact headers ON** (GC/heap) | vs OFF | **−2.0%** (L1 −3.1%) | **+1.0%** | flat |
+| **1 Netty I/O thread** | vs 2 | **−10%** (80→73 M/s) | **+6%** (0.45→0.48) | flat |
 
 So the kept config is the one with the **fewest cache misses and best IPC**:
-compact headers ON + 1 I/O thread. Two corrections the data forced: (1) the 1-I/O-thread
-advantage is **cache locality**, not "fewer context switches" — a 2nd event loop bounces
-connection/buffer state between the two cores' caches (lower IPC, more misses), while
-context switches barely move; (2) the context-switch rate (~18k/s) is **workload-governed**
-— driven by virtual-thread park/unpark on the blocking JDBC round-trips, unchanged by
-either knob. On this DB-bound path the efficiency gains don't widen rps (Postgres is the
-wall), but they're the right defaults for a more CPU-bound or higher-core deployment.
+compact headers ON + 1 Netty I/O thread (GC stays at `ConcGCThreads=1` throughout).
+Two corrections the data forced: (1) the 1-Netty-I/O-thread advantage is **cache
+locality**, not "fewer context switches" — a 2nd event loop bounces connection/buffer
+state between the two cores' caches (lower IPC, more misses), while context switches
+barely move; (2) the context-switch rate (~18k/s) is **workload-governed** — driven by
+virtual-thread park/unpark on the blocking JDBC round-trips, unchanged by either knob.
+On this DB-bound path the efficiency gains don't widen rps (Postgres is the wall), but
+they're the right defaults for a more CPU-bound or higher-core deployment.
 
 ## Caveats (read before trusting any single number)
 
