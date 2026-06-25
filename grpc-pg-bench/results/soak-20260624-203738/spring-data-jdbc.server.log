@@ -1,0 +1,25 @@
+2026-06-24T20:38:01.922+05:30  INFO 7975 --- [spring-data-jdbc-bench] [           main] c.beam.bench.SpringDataJdbcApplication   : Starting SpringDataJdbcApplication v1.0.0 using Java 25.0.3 with PID 7975 (/home/coding2fun/khekrn/gprc-benchmark/grpc-pg-bench/bin/spring-data-jdbc-bench.jar started by coding2fun in /home/coding2fun/khekrn/gprc-benchmark/grpc-pg-bench)
+2026-06-24T20:38:01.929+05:30  INFO 7975 --- [spring-data-jdbc-bench] [           main] c.beam.bench.SpringDataJdbcApplication   : No active profile set, falling back to 1 default profile: "default"
+2026-06-24T20:38:02.700+05:30  INFO 7975 --- [spring-data-jdbc-bench] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JDBC repositories in DEFAULT mode.
+2026-06-24T20:38:02.806+05:30  INFO 7975 --- [spring-data-jdbc-bench] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 98 ms. Found 3 JDBC repository interfaces.
+2026-06-24T20:38:03.191+05:30  INFO 7975 --- [spring-data-jdbc-bench] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-06-24T20:38:03.566+05:30  INFO 7975 --- [spring-data-jdbc-bench] [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@7b6860f9
+2026-06-24T20:38:03.568+05:30  INFO 7975 --- [spring-data-jdbc-bench] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::loadLibrary has been called by io.netty.util.internal.NativeLibraryUtil in an unnamed module (jar:nested:/home/coding2fun/khekrn/gprc-benchmark/grpc-pg-bench/bin/spring-data-jdbc-bench.jar/!BOOT-INF/lib/netty-common-4.2.15.Final.jar!/)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+2026-06-24T20:38:04.169+05:30  INFO 7975 --- [spring-data-jdbc-bench] [           main] com.beam.bench.GrpcServerConfig          : grpc-netty transport: epoll (io threads=1)
+2026-06-24T20:38:04.479+05:30  INFO 7975 --- [spring-data-jdbc-bench] [           main] o.s.grpc.server.NettyGrpcServerFactory   : Registered gRPC service: bench.v1.CommandService
+2026-06-24T20:38:04.479+05:30  INFO 7975 --- [spring-data-jdbc-bench] [           main] o.s.grpc.server.NettyGrpcServerFactory   : Registered gRPC service: grpc.reflection.v1.ServerReflection
+2026-06-24T20:38:04.479+05:30  INFO 7975 --- [spring-data-jdbc-bench] [           main] o.s.grpc.server.NettyGrpcServerFactory   : Registered gRPC service: grpc.health.v1.Health
+2026-06-24T20:38:04.586+05:30  INFO 7975 --- [spring-data-jdbc-bench] [           main] o.s.g.s.lifecycle.GrpcServerLifecycle    : gRPC Server started, listening on address: [/[0:0:0:0:0:0:0:0]:50060], port: 50060
+2026-06-24T20:38:04.590+05:30  INFO 7975 --- [spring-data-jdbc-bench] [           main] c.beam.bench.SpringDataJdbcApplication   : Started SpringDataJdbcApplication in 3.302 seconds (process running for 5.407)
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::arrayBaseOffset has been called by com.google.protobuf.UnsafeUtil (jar:nested:/home/coding2fun/khekrn/gprc-benchmark/grpc-pg-bench/bin/spring-data-jdbc-bench.jar/!BOOT-INF/lib/protobuf-java-4.34.2.jar!/)
+WARNING: Please consider reporting this to the maintainers of class com.google.protobuf.UnsafeUtil
+WARNING: sun.misc.Unsafe::arrayBaseOffset will be removed in a future release
+2026-06-24T21:08:36.808+05:30  INFO 7975 --- [spring-data-jdbc-bench] [ionShutdownHook] o.s.g.s.lifecycle.GrpcServerLifecycle    : Completed gRPC server shutdown
+2026-06-24T21:08:36.822+05:30  INFO 7975 --- [spring-data-jdbc-bench] [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...
+2026-06-24T21:08:36.837+05:30  INFO 7975 --- [spring-data-jdbc-bench] [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.

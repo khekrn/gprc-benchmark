@@ -26,9 +26,12 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"runtime"
+	"runtime/pprof"
 	"strconv"
 	"syscall"
 	"time"
@@ -63,6 +66,12 @@ const selectStateSQL = `SELECT state, version, (EXTRACT(EPOCH FROM updated_at) *
 type server struct {
 	benchv1.UnimplementedCommandServiceServer
 	pool *pgxpool.Pool
+	// skipRecvTs (env SKIP_RECV_TS=1) drops the per-call
+	// time.Now().UnixMicro() that fills ReceivedAtMicros. The benchmark
+	// loadgen never reads that field (it times each RPC client-side), and on
+	// a 2-core box that time.Now() shows up at a few % of the Execute CPU.
+	// OFF by default so the production response stays fully populated.
+	skipRecvTs bool
 }
 
 // fnv1a returns FNV-1a 32 over s, inlined over the string to avoid both the
@@ -78,7 +87,10 @@ func fnv1a(s string) uint32 {
 
 // Execute is the original single-INSERT autocommit hot path.
 func (s *server) Execute(ctx context.Context, req *benchv1.CommandRequest) (*benchv1.CommandResponse, error) {
-	recv := time.Now().UnixMicro()
+	var recv int64
+	if !s.skipRecvTs {
+		recv = time.Now().UnixMicro()
+	}
 	checksum := fnv1a(req.Payload)
 
 	var id int64
@@ -209,6 +221,51 @@ func run() error {
 		runtime.GOMAXPROCS(2)
 	}
 
+	// --- Opt-in profiling (OFF unless the env var is set). None of this runs
+	// on the production path; it exists only for the performance-tuning study.
+	//
+	//   PPROF_ADDR=127.0.0.1:6060   -> serves net/http/pprof (CPU/heap/block/
+	//                                  mutex/goroutine) on that address.
+	//   CPUPROFILE=/path/cpu.pprof  -> writes a CPU profile for the process
+	//                                  lifetime (stopped on graceful shutdown).
+	//   BLOCKPROFILE_RATE=1         -> runtime.SetBlockProfileRate(n) so the
+	//                                  /debug/pprof/block profile captures
+	//                                  off-CPU waits (pool-acquire, lock waits).
+	//   MUTEXPROFILE_FRACTION=1     -> runtime.SetMutexProfileFraction(n) for
+	//                                  the /debug/pprof/mutex profile.
+	if r := envIntOr("BLOCKPROFILE_RATE", 0); r > 0 {
+		runtime.SetBlockProfileRate(r)
+		slog.Info("block profiling enabled", "rate", r)
+	}
+	if f := envIntOr("MUTEXPROFILE_FRACTION", 0); f > 0 {
+		runtime.SetMutexProfileFraction(f)
+		slog.Info("mutex profiling enabled", "fraction", f)
+	}
+	if addr := os.Getenv("PPROF_ADDR"); addr != "" {
+		go func() {
+			slog.Info("pprof http server listening", "addr", addr)
+			if err := http.ListenAndServe(addr, nil); err != nil {
+				slog.Warn("pprof http server stopped", "err", err)
+			}
+		}()
+	}
+	if path := os.Getenv("CPUPROFILE"); path != "" {
+		f, err := os.Create(path)
+		if err != nil {
+			return fmt.Errorf("create cpuprofile: %w", err)
+		}
+		if err := pprof.StartCPUProfile(f); err != nil {
+			f.Close()
+			return fmt.Errorf("start cpuprofile: %w", err)
+		}
+		slog.Info("cpu profiling enabled", "path", path)
+		defer func() {
+			pprof.StopCPUProfile()
+			f.Close()
+			slog.Info("cpu profile written", "path", path)
+		}()
+	}
+
 	dsn := envOr("DATABASE_URL",
 		"postgres://bench:bench@127.0.0.1:5432/bench?sslmode=disable")
 	addr := envOr("LISTEN_ADDR", "127.0.0.1:50051")
@@ -224,11 +281,40 @@ func run() error {
 	// Recycle connections occasionally so PG-side restarts / parameter
 	// changes don't leave stale handles in the pool. Numbers picked to be
 	// large enough that they never fire during a 30s benchmark phase.
-	cfg.MaxConnLifetime = 30 * time.Minute
-	cfg.MaxConnIdleTime = 5 * time.Minute
-	cfg.HealthCheckPeriod = 30 * time.Second
+	//
+	// PGX_NO_EXPIRY=1 (opt-in tuning knob) zeroes MaxConnLifetime/IdleTime so
+	// pgxpool skips the per-acquire/per-release isExpired() time.Now() calls
+	// (visible at a few % of CPU on a 2-core box). Default keeps the
+	// production-safe recycling behavior.
+	if os.Getenv("PGX_NO_EXPIRY") == "1" {
+		// Zeroing lifetime/idle disables the per-acquire & per-release
+		// isExpired() time.Now() calls. HealthCheckPeriod must stay > 0:
+		// pgxpool panics (non-positive NewTicker interval) on 0, and with
+		// lifetime/idle zeroed the background check has nothing to expire,
+		// so its cost is negligible.
+		cfg.MaxConnLifetime = 0
+		cfg.MaxConnIdleTime = 0
+		cfg.HealthCheckPeriod = 1 * time.Minute
+	} else {
+		cfg.MaxConnLifetime = 30 * time.Minute
+		cfg.MaxConnIdleTime = 5 * time.Minute
+		cfg.HealthCheckPeriod = 30 * time.Second
+	}
 	// pgx v5 statement cache is on by default. Mirrored on Vert.x via
 	// setCachePreparedStatements(true).
+	//
+	// PGX_EXEC_MODE (opt-in tuning knob; default = pgx default
+	// QueryExecModeCacheStatement): "describe" switches to
+	// QueryExecModeCacheDescribe (cache the type oids, let the server
+	// auto-prepare). Lets the A/B study compare the two without a rebuild.
+	switch os.Getenv("PGX_EXEC_MODE") {
+	case "describe":
+		cfg.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeCacheDescribe
+	case "exec":
+		cfg.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeExec
+	case "simple":
+		cfg.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
+	}
 
 	rootCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -284,9 +370,14 @@ func run() error {
 		// goroutine per stream; pinning a small pool amortizes goroutine
 		// setup over the lifetime of the benchmark. Sized at 4x GOMAXPROCS
 		// so PG-blocked workers don't head-of-line block CPU-ready ones.
-		grpc.NumStreamWorkers(uint32(runtime.GOMAXPROCS(0))*4),
+		// GRPC_STREAM_WORKERS overrides for the A/B study (0 = grpc default,
+		// fresh goroutine per stream).
+		grpc.NumStreamWorkers(uint32(envIntOr("GRPC_STREAM_WORKERS", runtime.GOMAXPROCS(0)*4))),
 	)
-	benchv1.RegisterCommandServiceServer(grpcServer, &server{pool: pool})
+	benchv1.RegisterCommandServiceServer(grpcServer, &server{
+		pool:       pool,
+		skipRecvTs: os.Getenv("SKIP_RECV_TS") == "1",
+	})
 
 	// Standard gRPC health service. The orchestrator could probe this if
 	// it wanted readiness-gated start; for now it's wired up for parity

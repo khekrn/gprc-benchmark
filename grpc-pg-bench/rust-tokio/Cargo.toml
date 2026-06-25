@@ -17,6 +17,16 @@ tokio-postgres     = "0.7"
 deadpool-postgres  = "0.14"
 tracing            = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# In-process instrumentation profiler (no perf/root/kernel settings needed —
+# fits this box's perf_event_paranoid=4). Optional + feature-gated so the
+# shipped release build never pulls it in. Profile build:
+#   cargo build --release --features hotpath
+hotpath            = { version = "0.18", optional = true }
+
+[features]
+# Enables the #[hotpath::measure] / #[hotpath::main] instrumentation (the crate's
+# own `hotpath` feature must be turned on, else the macros compile to no-ops).
+hotpath = ["dep:hotpath", "hotpath/hotpath"]
 
 [build-dependencies]
 tonic-build = "0.12"

@@ -18,6 +18,8 @@ export KOTLIN_ADDR="${KOTLIN_HOST}:${KOTLIN_PORT}"
 export RUST_ADDR="${RUST_ADDR:-127.0.0.1:50053}"
 # Rust tokio worker threads — matches GOMAXPROCS / VERTX_EVENT_LOOPS for fairness.
 export RUST_WORKER_THREADS="${RUST_WORKER_THREADS:-2}"
+# go-gorm: Go + GORM ORM over jackc/pgx (the ORM-cost counterpart to go-pgx).
+export GO_GORM_ADDR="${GO_GORM_ADDR:-127.0.0.1:50054}"
 # Spring Boot gRPC + virtual threads + HikariCP JDBC.
 export SPRING_VT_HOST="${SPRING_VT_HOST:-127.0.0.1}"
 export SPRING_VT_PORT="${SPRING_VT_PORT:-50056}"
@@ -30,6 +32,10 @@ export SPRING_RT_ADDR="${SPRING_RT_HOST}:${SPRING_RT_PORT}"
 export SPRING_KT_VT_HOST="${SPRING_KT_VT_HOST:-127.0.0.1}"
 export SPRING_KT_VT_PORT="${SPRING_KT_VT_PORT:-50059}"
 export SPRING_KT_VT_ADDR="${SPRING_KT_VT_HOST}:${SPRING_KT_VT_PORT}"
+# Spring Boot gRPC + virtual threads + Spring Data JDBC (repositories) over HikariCP.
+export SPRING_DATA_JDBC_HOST="${SPRING_DATA_JDBC_HOST:-127.0.0.1}"
+export SPRING_DATA_JDBC_PORT="${SPRING_DATA_JDBC_PORT:-50060}"
+export SPRING_DATA_JDBC_ADDR="${SPRING_DATA_JDBC_HOST}:${SPRING_DATA_JDBC_PORT}"
 
 # --- Resource limits (server simulates a 2-core / 4 GB box) ---
 # Server pinned to two cores and capped at 4 GB via systemd-run scope (see
@@ -64,6 +70,14 @@ export GOMAXPROCS="${GOMAXPROCS:-2}"
 #   - AlwaysPreTouch front-loads page faults so the first measured phase
 #     isn't taxed by lazy commit.
 export JVM_OPTS="${JVM_OPTS:--Xms512m -Xmx1024m -XX:+UseZGC -XX:+AlwaysPreTouch}"
+# spring-rt (reactive Spring Data R2DBC) gets its own JVM opts: the shared set
+# plus -XX:+UseCompactObjectHeaders (JEP 519, product flag on JDK 25). The
+# reactive path allocates many small objects (Reactor operators, coroutine
+# continuations, boxed Longs), so 12->8 B headers cut allocation + cache
+# footprint. This is a *focused, stack-specific* tune (NOT applied to the other
+# JVM stacks), so cross-stack comparisons against spring-rt carry that caveat.
+# The epoll transport + directExecutor live in spring-rt's GrpcServerConfig.
+export SPRING_RT_JVM_OPTS="${SPRING_RT_JVM_OPTS:-${JVM_OPTS} -XX:+UseCompactObjectHeaders}"
 export VERTX_EVENT_LOOPS="${VERTX_EVENT_LOOPS:-2}"
 
 # Connection pool size (identical for both stacks)

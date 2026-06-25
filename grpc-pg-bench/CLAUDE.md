@@ -1,17 +1,18 @@
 # grpc-pg-bench — Claude context
 
-Single-purpose repo: benchmark **six gRPC + Postgres stacks** on the
+Single-purpose repo: benchmark **seven gRPC + Postgres stacks** on the
 gRPC-unmarshal → tiny CPU touch → Postgres write/read path, to decide a stack
 for a next-gen workflow engine. Target hardware: **2 cores / 4 GB RAM, Ubuntu
-Linux**. All six sit behind the same `bench.v1.CommandService`, the same SQL,
+Linux**. All seven sit behind the same `bench.v1.CommandService`, the same SQL,
 and the same Go loadgen:
 
 - **go-pgx** — Go + grpc-go + jackc/pgx (baseline).
 - **rust-tokio** — Rust + tonic + tokio-postgres + deadpool (async, native).
 - **kotlin-vertx** — Kotlin coroutines + Vert.x 5 gRPC + vertx-pg-client (reactive).
-- **spring-vt** — Spring Boot 4.1 gRPC + virtual threads + HikariCP JDBC.
-- **spring-rt** — Spring Boot 4.1 gRPC + Kotlin coroutines + R2DBC (reactive).
+- **spring-vt** — Spring Boot 4.1 gRPC + virtual threads + HikariCP JDBC (Spring `JdbcClient`).
+- **spring-rt** — Spring Boot 4.1 gRPC + Kotlin coroutines + **Spring Data R2DBC** (reactive; epoll + direct executor + compact headers).
 - **spring-kt-vt** — Spring Boot 4.1 gRPC + Kotlin + virtual threads + **JetBrains Exposed DSL** over HikariCP JDBC (tuned for c=128).
+- **spring-data-jdbc** — Spring Boot 4.1 gRPC + virtual threads + **Spring Data JDBC** repositories over HikariCP (the Java twin of spring-vt; only the data layer differs).
 
 The three `-vt` stacks use blocking JDBC on virtual threads; spring-kt-vt is the
 Kotlin twin of the Java spring-vt (same Loom model, not coroutines) but drives
@@ -37,10 +38,12 @@ kotlin-vertx/                  # Maven — Kotlin/Vert.x reactive (Java 25, Kotl
   src/main/kotlin/com/beam/bench/   # Main/MainVerticle/GrpcVerticle/CommandServiceImpl/Db/Config/Fnv
 spring-vt/                     # Maven — Spring Boot 4.1 gRPC + virtual threads + HikariCP JDBC
   src/main/java/com/beam/bench/     # CommandServiceImpl (StreamObserver), Db (JDBC), GrpcServerConfig (VT executor), Fnv
-spring-rt/                     # Maven — Spring Boot 4.1 gRPC + Kotlin coroutines + R2DBC
-  src/main/kotlin/com/beam/bench/   # CommandServiceImpl (CoroutineImplBase suspend), Db (DatabaseClient), Fnv, SpringRtApplication
+spring-rt/                     # Maven — Spring Boot 4.1 gRPC + Kotlin coroutines + Spring Data R2DBC (reactive; epoll + direct executor)
+  src/main/kotlin/com/beam/bench/   # CommandServiceImpl (CoroutineImplBase suspend), Db (@Component, CoroutineCrudRepositories), Command/WorkflowState/OutboxEvent (@Table) + Repositories (@Modifying upsert), GrpcServerConfig (epoll + directExecutor, NO VT executor), Fnv, SpringRtApplication
 spring-kt-vt/                   # Maven — Spring Boot 4.1 gRPC + Kotlin + virtual threads + Exposed DSL/JDBC (tuned for c=128)
   src/main/kotlin/com/beam/bench/   # CommandServiceImpl (Java ImplBase/StreamObserver from Kotlin), Db (@Transactional Exposed DSL), GrpcServerConfig (VT executor + Netty tuning), Fnv, SpringKtVtApplication (@ImportAutoConfiguration ExposedAutoConfiguration)
+spring-data-jdbc/              # Maven — Spring Boot 4.1 gRPC + virtual threads + Spring Data JDBC repositories over HikariCP
+  src/main/java/com/beam/bench/     # CommandServiceImpl (StreamObserver, copied from spring-vt), Db (@Component, repos), Command/WorkflowState/OutboxEvent (@Table records), CommandRepository/WorkflowStateRepository (@Modifying upsert)/OutboxRepository, GrpcServerConfig (copied), Fnv, SpringDataJdbcApplication
   (each JVM module has src/main/proto/command.proto + application.properties/logback)
 loadgen/main.go                # closed-loop gRPC driver: execute|exectx|read|mixed
 scripts/
@@ -52,6 +55,7 @@ scripts/
   build_spring_vt.sh           # mvn package -> bin/spring-vt-bench.jar
   build_spring_rt.sh           # mvn package -> bin/spring-rt-bench.jar
   build_spring_kt_vt.sh        # mvn package -> bin/spring-kt-vt-bench.jar
+  build_spring_data_jdbc.sh    # mvn package -> bin/spring-data-jdbc-bench.jar
   run_*_server.sh              # standalone server runners
   run_benchmark.sh             # orchestrator (one server at a time)
 results/<ts>/                  # per-run JSON + summary.csv + environment.txt
@@ -105,16 +109,33 @@ which taskset
   `<goal>generate</goal>` with no `<configuration>` (matches the official
   `samples/grpc-server` pom). grpc-java 1.80.0 / protobuf-java 4.34.2 are managed
   by the Boot BOM (properties `${grpc-java.version}` / `${protobuf-java.version}`).
-- **spring-rt** (Spring Boot 4.1 + Kotlin coroutines + R2DBC). Coroutine gRPC
-  stubs via grpc-kotlin (`grpc-kotlin.version` 1.5.0, Boot-managed). The ascopes
-  plugin runs `protoc-gen-grpc-kotlin` as a **`jvm-maven`** plugin (classifier
-  `jdk8`, type `jar`) alongside the `binary-maven` `protoc-gen-grpc-java` —
-  mirrors the official `samples/grpc-server-kotlin` pom. Service extends
-  `CommandServiceGrpcKt.CommandServiceCoroutineImplBase` (`suspend fun`s); DB via
-  R2DBC `DatabaseClient` + reactive `TransactionalOperator.executeAndAwait`,
-  `r2dbc-postgresql` driver. Note: the 0-or-1 nullable await is
-  `awaitFirstOrNull()` (there is no `awaitSingleOrNull` in kotlinx-coroutines).
-  Non-blocking end to end — no JDBC, no `Dispatchers.IO`.
+- **spring-rt** (Spring Boot 4.1 + Kotlin coroutines + **Spring Data R2DBC**,
+  port **50058**). Fully reactive/non-blocking. Coroutine gRPC stubs via
+  grpc-kotlin (`grpc-kotlin.version` 1.5.0, Boot-managed); the ascopes plugin runs
+  `protoc-gen-grpc-kotlin` as a **`jvm-maven`** plugin (classifier `jdk8`, type
+  `jar`) alongside the `binary-maven` `protoc-gen-grpc-java` — mirrors the official
+  `samples/grpc-server-kotlin` pom. Service extends
+  `CommandServiceGrpcKt.CommandServiceCoroutineImplBase` (`suspend fun`s). **Data
+  layer is Spring Data R2DBC** (was raw `DatabaseClient`): `Command`/`WorkflowState`
+  /`OutboxEvent` `@Table` data classes, `CoroutineCrudRepository`s (suspend — fully
+  non-blocking), a `@Modifying @Query` reactive UPSERT (`save()` can't UPSERT), and
+  a `@Transactional` suspend `executeTx` (Boot's reactive `R2dbcTransactionManager`
+  backs `@Transactional` on suspend funs). `r2dbc-postgresql` driver, R2DBC pool.
+  Like spring-data-jdbc, `save()` is transactional → the `execute` insert is a
+  3-round-trip transaction. **Tuned with spring-vt's playbook ADAPTED for reactive**
+  (new `GrpcServerConfig`): epoll + a **direct executor** — NOT the VT executor
+  spring-vt uses; reactive handlers must stay on the event loop, a VT-per-task
+  executor would add a pointless hop — plus 1 MiB windows/TCP_NODELAY/keepalive,
+  I/O threads = cores/2. `GRPC_TUNED=off` env bypasses the customizer (same-build
+  A/B). JVM gets `SPRING_RT_JVM_OPTS` (shared opts + `-XX:+UseCompactObjectHeaders`,
+  JEP 519 — spring-rt-only, so cross-stack comparisons carry that caveat). Tuning =
+  **+28%** over un-tuned (~3,757 → ~4,828 rps); still the slowest stack —
+  STRUCTURAL: reactive cross-event-loop handoff on 2 cores costs more than
+  virtual-thread park/unpark (profiled via async-profiler itimer/wall/alloc:
+  I/O-wait + handoff bound, not CPU/alloc bound — a `@Query` autocommit insert
+  measured *equal*, confirming it). Needs the epoll netty deps in the pom
+  (`netty-transport-classes-epoll` compile + native classifier runtime), same as
+  spring-vt. Non-blocking end to end — no JDBC, no `Dispatchers.IO`.
 - **spring-kt-vt** (Spring Boot 4.1 + Kotlin + virtual threads + **Exposed DSL**
   over HikariCP JDBC, port **50059**). The Kotlin sibling of spring-vt — blocking,
   on virtual threads, NOT coroutines/R2DBC — but the data layer is the JetBrains
@@ -145,6 +166,34 @@ which taskset
   Pool stays min=4/max=16 (PG_POOL_MIN/MAX env) for fairness; speed comes from the
   VT executor + Netty knobs, not an oversized pool. The Kotlin `spring` compiler
   plugin (allopen) opens the `@Transactional` class so Spring can proxy it.
+- **spring-data-jdbc** (Spring Boot 4.1 + virtual threads + **Spring Data JDBC**
+  repositories over HikariCP, port **50060**). The Java twin of spring-vt — same
+  Loom model (blocking on virtual threads, NOT reactive), same gRPC contract,
+  same SQL, same HikariCP pool, same `GrpcServerConfig`/`Fnv`/`CommandServiceImpl`
+  (copied verbatim). The ONLY difference is the data layer: spring-vt drives the
+  fluent `JdbcClient`, this drives the Spring Data JDBC repository abstraction.
+  Dependency is `spring-boot-starter-data-jdbc` (pulls in `spring-boot-starter-jdbc`
+  → HikariCP transitively, so HikariCP is still the pool — only the query layer
+  differs). Entities are immutable `record`s mapped with `@Table`/`@Id`/`@Column`
+  (Spring Data JDBC's `DefaultNamingStrategy` does NOT snake_case, so every
+  camelCase field that maps to a snake_case column needs an explicit `@Column` —
+  `workflowId`→`workflow_id` etc; `received_at`/`created_at`/`dispatched` are left
+  unmapped so the DB defaults fill them). `Command.save()` on a null `@Id` issues
+  the INSERT + fetches the generated key (the repository equivalent of
+  `INSERT … RETURNING id`). **The UPSERT cannot go through `save()`** — Spring
+  Data JDBC's `save()` only INSERTs *or* UPDATEs (and a non-null String `@Id` on
+  `workflow_state` would force an UPDATE), so the conflict-aware insert lives in
+  `WorkflowStateRepository.upsert` as a native `@Modifying @Query` (byte-identical
+  SQL to spring-vt's UPSERT, named `:wid` params). **Key fairness/perf note:**
+  `CrudRepository.save()` is `@Transactional` by default, so even the "autocommit"
+  `execute` path costs BEGIN + INSERT + COMMIT (3 DB round-trips) vs spring-vt's
+  single autocommit round-trip — that, plus entity-mapping CPU, is why it runs
+  materially slower on a small/runtime-bound table (~7.6k vs ~19k rps in a 60s
+  same-session A/B at pool=32). `executeTx` is `@Transactional` on the `Db`
+  `@Component` (Spring CGLIB-proxies it; methods must be public). Same VT-executor
+  requirement as spring-vt (the copied `GrpcServerConfig` sets
+  `builder.executor(newVirtualThreadPerTaskExecutor())` + epoll + 1 I/O thread).
+  `spring.sql.init.mode=never` keeps Boot off the schema (setup_db.sh owns DDL).
 - **rust-tokio** (Rust + tonic + tokio-postgres + deadpool, port **50053**,
   edition 2024). Async/native, the non-JVM counterpart to go-pgx. Split into
   one-concern-per-file modules under `src/` (`main`, `config`, `proto`, `fnv`,
@@ -172,7 +221,8 @@ which taskset
 ./scripts/build_spring_vt.sh    # produces bin/spring-vt-bench.jar
 ./scripts/build_spring_rt.sh    # produces bin/spring-rt-bench.jar
 ./scripts/build_spring_kt_vt.sh # produces bin/spring-kt-vt-bench.jar  (needs JDK 25)
-./scripts/run_benchmark.sh      # full sweep, all 6 stacks, over CONCURRENCY_LEVELS
+./scripts/build_spring_data_jdbc.sh # produces bin/spring-data-jdbc-bench.jar  (needs JDK 25)
+./scripts/run_benchmark.sh      # full sweep, all 7 stacks, over CONCURRENCY_LEVELS
 ```
 
 Workload selection via `LOADGEN_MODE`: `execute` (autocommit INSERT, default),
@@ -293,7 +343,7 @@ After `./scripts/run_benchmark.sh` completes:
 #    ones and avoids pkill self-match (a pkill -f pattern that also appears in
 #    your command line will SIGTERM your own shell — kill by PID from jps). The
 #    native servers (go-server, rust-server) aren't JVMs, so grep for them too.
-ps -ef | grep -E '(go-server|rust-server|kotlin-vertx-bench|quarkus-run.jar|spring-vt-bench|spring-rt-bench|spring-kt-vt-bench)' | grep -v grep \
+ps -ef | grep -E '(go-server|rust-server|kotlin-vertx-bench|quarkus-run.jar|spring-vt-bench|spring-rt-bench|spring-kt-vt-bench|spring-data-jdbc-bench)' | grep -v grep \
   && echo "BAD: orphans" || echo "OK"
 
 # 2. Ports free
@@ -309,6 +359,7 @@ grep -c 'quarkus-rt server up'    "${RUN}/quarkus-rt.server.log"        # = N le
 grep -c 'gRPC Server started'     "${RUN}/spring-vt.server.log"         # = N levels
 grep -c 'gRPC Server started'     "${RUN}/spring-rt.server.log"         # = N levels
 grep -c 'gRPC Server started'     "${RUN}/spring-kt-vt.server.log"      # = N levels
+grep -c 'gRPC Server started'     "${RUN}/spring-data-jdbc.server.log"  # = N levels
 
 # 4. ZERO blocked-event-loop warnings on the REACTIVE stacks (kotlin-vertx,
 #    quarkus-rt). If non-zero, something blocks the event loop and the reactive
@@ -336,18 +387,18 @@ All knobs are in `scripts/config.sh`. The ones you'll actually change:
 
 | Var | Default | Notes |
 |-----|---------|-------|
-| `STACKS` | `go-pgx rust-tokio kotlin-vertx quarkus-vt quarkus-rt spring-vt spring-rt spring-kt-vt` | which servers to sweep |
+| `STACKS` | `go-pgx rust-tokio kotlin-vertx spring-vt spring-rt spring-kt-vt spring-data-jdbc` | which servers to sweep |
 | `CONCURRENCY_LEVELS` | `1 8 32 64 128` | the sweep |
 | `LOADGEN_MODE` | `execute` | `execute` \| `exectx` \| `read` \| `mixed` |
 | `LOADGEN_READ_PCT` / `LOADGEN_KEYSPACE` | `20` / `10000` | mixed read %; keyspace = read-seed size |
 | `WARMUP` / `DURATION` | `5s` / `30s` | bump for publishable numbers (15s/60s) |
 | `PG_POOL_MIN/MAX` | `4` / `16` | match across all five stacks |
 | `PIN_SERVER_CPUS` / `PIN_CLIENT_CPUS` | `2,3` / `4,5` | server vs client on separate cores |
-| `JVM_OPTS` | `-Xms512m -Xmx1024m -XX:+UseZGC -XX:+AlwaysPreTouch` | Java 25, all 4 JVM stacks |
+| `JVM_OPTS` | `-Xms512m -Xmx1024m -XX:+UseZGC -XX:+AlwaysPreTouch` | Java 25, all 5 JVM stacks |
 
 Per-stack gRPC ports: go-pgx `50051`, kotlin-vertx `50052`, rust-tokio `50053`,
 quarkus-vt `50055`, spring-vt `50056`, quarkus-rt `50057`, spring-rt `50058`,
-spring-kt-vt `50059` (overridable in `config.sh`).
+spring-kt-vt `50059`, spring-data-jdbc `50060` (overridable in `config.sh`).
 
 To stress *runtime/driver* and not Postgres: switch `commands` to `UNLOGGED`
 in `sql/schema.sql`, drop the index, or move PG to a different box. Document

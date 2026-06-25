@@ -20,6 +20,10 @@ mod service;
 use config::Config;
 use db::Db;
 
+// `#[hotpath::main]` (feature-gated) installs the profiler and prints the
+// per-function timing report when main returns (i.e. after graceful shutdown).
+// No-op in the normal build.
+#[cfg_attr(feature = "hotpath", hotpath::main)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cfg = Config::from_env();
 

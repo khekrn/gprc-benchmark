@@ -8,3 +8,6 @@ bin/
 # IDE / OS
 .idea/
 .DS_Store
+
+# Raw async-profiler stack dumps (multi-MB intermediates; keep the .html flamegraph)
+*.collapsed

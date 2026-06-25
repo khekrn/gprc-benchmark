@@ -31,7 +31,7 @@ if [ -s "${HOME}/.sdkman/bin/sdkman-init.sh" ]; then
   set -u
 fi
 
-STACKS="${STACKS:-go-pgx rust-tokio kotlin-vertx spring-vt spring-rt spring-kt-vt}"
+STACKS="${STACKS:-go-pgx go-gorm rust-tokio kotlin-vertx spring-vt spring-rt spring-kt-vt spring-data-jdbc}"
 LOADGEN="${ROOT_DIR}/bin/loadgen"
 [ -x "${LOADGEN}" ] || { echo "Build loadgen first: ./scripts/build_go.sh"; exit 1; }
 
@@ -126,6 +126,15 @@ start_server() {
       wait_for_port "${GO_ADDR%%:*}" "${GO_ADDR##*:}"
       TARGET_ADDR="${GO_ADDR}"
       ;;
+    go-gorm)
+      LISTEN_ADDR="${GO_GORM_ADDR}" GOMAXPROCS="${GOMAXPROCS}" \
+        ${memcap[@]+"${memcap[@]}"} \
+        ${SERVER_PIN[@]+"${SERVER_PIN[@]}"} "${ROOT_DIR}/bin/go-gorm-server" \
+        >> "${RUN_DIR}/${stack}.server.log" 2>&1 &
+      SERVER_PID=$!
+      wait_for_port "${GO_GORM_ADDR%%:*}" "${GO_GORM_ADDR##*:}"
+      TARGET_ADDR="${GO_GORM_ADDR}"
+      ;;
     kotlin-vertx)
       # shellcheck disable=SC2086
       LISTEN_HOST="${KOTLIN_HOST}" LISTEN_PORT="${KOTLIN_PORT}" \
@@ -157,11 +166,13 @@ start_server() {
       TARGET_ADDR="${SPRING_VT_ADDR}"
       ;;
     spring-rt)
-      # Spring Boot (Kotlin coroutines + R2DBC) executable jar; reads LISTEN_PORT.
+      # Spring Boot (Kotlin coroutines + Spring Data R2DBC) executable jar; reads
+      # LISTEN_PORT. Uses SPRING_RT_JVM_OPTS (shared opts + compact headers); the
+      # epoll transport + directExecutor are baked into its GrpcServerConfig.
       # shellcheck disable=SC2086
       LISTEN_HOST="${SPRING_RT_HOST}" LISTEN_PORT="${SPRING_RT_PORT}" \
         ${memcap[@]+"${memcap[@]}"} \
-        ${SERVER_PIN[@]+"${SERVER_PIN[@]}"} java ${JVM_OPTS} -jar "${ROOT_DIR}/bin/spring-rt-bench.jar" \
+        ${SERVER_PIN[@]+"${SERVER_PIN[@]}"} java ${SPRING_RT_JVM_OPTS} -jar "${ROOT_DIR}/bin/spring-rt-bench.jar" \
         >> "${RUN_DIR}/${stack}.server.log" 2>&1 &
       SERVER_PID=$!
       wait_for_port "${SPRING_RT_HOST}" "${SPRING_RT_PORT}"
@@ -178,6 +189,18 @@ start_server() {
       SERVER_PID=$!
       wait_for_port "${SPRING_KT_VT_HOST}" "${SPRING_KT_VT_PORT}"
       TARGET_ADDR="${SPRING_KT_VT_ADDR}"
+      ;;
+    spring-data-jdbc)
+      # Spring Boot (virtual threads + Spring Data JDBC) executable jar;
+      # reads LISTEN_PORT for spring.grpc.server.port.
+      # shellcheck disable=SC2086
+      LISTEN_HOST="${SPRING_DATA_JDBC_HOST}" LISTEN_PORT="${SPRING_DATA_JDBC_PORT}" \
+        ${memcap[@]+"${memcap[@]}"} \
+        ${SERVER_PIN[@]+"${SERVER_PIN[@]}"} java ${JVM_OPTS} -jar "${ROOT_DIR}/bin/spring-data-jdbc-bench.jar" \
+        >> "${RUN_DIR}/${stack}.server.log" 2>&1 &
+      SERVER_PID=$!
+      wait_for_port "${SPRING_DATA_JDBC_HOST}" "${SPRING_DATA_JDBC_PORT}"
+      TARGET_ADDR="${SPRING_DATA_JDBC_ADDR}"
       ;;
     *)
       echo "unknown stack: ${stack}" >&2

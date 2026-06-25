@@ -1,10 +1,15 @@
 # gRPC + Postgres Benchmark — Go vs Rust vs Spring Boot (virtual threads)
 
-Three functionally identical gRPC services that unmarshal a command, do a tiny
+Functionally identical gRPC services that unmarshal a command, do a tiny
 CPU touch (FNV-1a checksum), and `INSERT` it into Postgres. The goal is to pick a
 stack for a **next-gen distributed workflow engine**, judged on **sustained
 throughput and latency** on a **2-core** box — the shape of a small cloud node
 (memory is cheap on AWS; compute is the cost that matters).
+
+The core comparison is **three runtimes** (Go, Rust, Spring Boot on virtual
+threads). A fourth stack, **spring-data-jdbc**, is spring-vt with only the data
+layer swapped (Spring Data JDBC repositories instead of `JdbcClient`), so it
+isolates the **cost of that ORM-lite abstraction** on the same hot path.
 
 The benchmark here is a **30-minute sustained soak** (one stack at a time, on a
 fresh boot). That's the number that reflects how an always-on engine actually
@@ -12,20 +17,36 @@ behaves under continuous load over time.
 
 > A broader 8-stack exploration is archived in
 > [`README-archive-8stacks.md`](README-archive-8stacks.md). This document is the
-> focused **3-stack soak**.
+> focused **3-stack soak** (plus data-layer/ORM variants — **spring-data-jdbc**,
+> **go-gorm**, **spring-rt** — compared against the raw-driver baselines).
 
-## The three stacks
+## The stacks
 
 - **go-pgx** — Go + `google.golang.org/grpc` + `jackc/pgx` (pgxpool). The native
   baseline: goroutines, graceful shutdown, keepalive, tuned pool.
+- **go-gorm** — go-pgx with the data layer swapped to the **GORM ORM**
+  (`gorm.io/gorm`), which uses **jackc/pgx under the hood** (`gorm.io/driver/postgres`
+  → pgx stdlib). Same gRPC/transport/SQL/pgx wire as go-pgx; only `Create()`/
+  `Transaction()` replace hand-written `QueryRow`. The Go "ORM cost" data point vs
+  go-pgx — the mirror of spring-data-jdbc vs spring-vt.
 - **rust-tokio** — Rust + `tonic` + `tokio-postgres` + `deadpool`. Async/native;
   tonic's HTTP/2 transport tuned like go (1 MiB windows, `tcp_nodelay`, keepalive).
 - **spring-vt** — Spring Boot 4.1 gRPC + **virtual threads** + **Spring
   `JdbcClient`** over HikariCP. Blocking code on Loom (no reactive). Config: epoll
   transport, a single Netty I/O thread, ZGC + 2 GB heap, pool 32. (How that config
   was arrived at — profiling + A/Bs — is in [`spring-vt/PROFILING.md`](spring-vt/PROFILING.md).)
+- **spring-data-jdbc** — spring-vt with the data layer swapped to **Spring Data
+  JDBC** repositories (entities + `CrudRepository` + a `@Modifying` upsert).
+  Everything else identical: same VT model, same HikariCP pool (32), same
+  epoll/heap/SQL/contract. The abstraction-cost data point vs `JdbcClient`.
+- **spring-rt** — Spring Boot 4.1 gRPC + **Kotlin coroutines** + **Spring Data
+  R2DBC** (`CoroutineCrudRepository`) — fully reactive/non-blocking. Tuned with
+  the same playbook as spring-vt *adapted for reactive*: epoll + a **direct
+  executor** (NOT a virtual-thread executor — reactive stays on the event loop),
+  1 MiB windows/keepalive, ZGC + compact object headers (JEP 519). The reactive
+  counterpoint to the blocking-on-VT stacks.
 
-A single Go load generator drives all three, so you measure the *servers*.
+A single Go load generator drives them all, so you measure the *servers*.
 
 ## Test hardware
 
@@ -36,7 +57,7 @@ A single Go load generator drives all three, so you measure the *servers*.
 | Loadgen | pinned to cores 4,5 (never steals server CPU) |
 | Postgres | local, v16.14 (gets the remaining cores) |
 | Runtimes | Go 1.23+ (GOMAXPROCS=2), Rust (2 worker threads), JDK 25 (Corretto) |
-| Pool | **32** DB connections, identical for all three |
+| Pool | **32** DB connections, identical across stacks |
 | Payload | 256 B · client connections 4 (HTTP/2, multiplexed) |
 
 ## Quick start
@@ -46,10 +67,11 @@ A single Go load generator drives all three, so you measure the *servers*.
 ./scripts/build_go.sh           # bin/go-server + bin/loadgen (needs protoc)
 ./scripts/build_rust.sh         # bin/rust-server (needs cargo + protoc)
 ./scripts/build_spring_vt.sh    # bin/spring-vt-bench.jar (needs JDK 25)
+./scripts/build_spring_data_jdbc.sh  # bin/spring-data-jdbc-bench.jar (needs JDK 25)
 
 # The benchmark: 30-min sustained soak, one stack at a time, c=64,
-# with cleanup + cooldown between stacks:
-bash scripts/soak_3stacks.sh
+# with cleanup + cooldown between stacks (STACKS= picks which to run):
+STACKS="go-pgx rust-tokio spring-vt spring-data-jdbc" bash scripts/soak_3stacks.sh
 ```
 
 ---
@@ -82,7 +104,7 @@ immediately sends the next** — so there are always exactly 64 requests in flig
 
 - **`execute`** — one autocommit `INSERT` into the `commands` table per request,
   plus the FNV-1a checksum CPU touch. Payload 256 B. (Same SQL/contract for all
-  three stacks; only the driver differs.)
+  stacks; only the driver / data layer differs.)
 
 ### Isolation & fairness (per stack)
 
@@ -118,9 +140,32 @@ end-to-end per-request, measured over the full 30-minute window.
 | **spring-vt** (VT + JdbcClient) | **11,973** | 4.3 | 9.6 | 12.1 | 38.3 | 527 ms | 21.5 M | **0** |
 | **rust-tokio** | 11,081 | 5.3 | 9.8 | **11.4** | 43.2 | 700 ms | 19.9 M | **0** |
 | **go-pgx** | 10,081 | 5.7 | 9.8 | 12.7 | 45.7 | **3,513 ms** | 18.1 M | **0** |
+| **spring-data-jdbc** (VT + Spring Data JDBC) † | 7,373 | 8.5 | 11.5 | 15.1 | 35.6 | 650 ms | 13.3 M | **0** |
+| **go-gorm** (GORM ORM over pgx) | 5,767 | 10.1 | 16.6 | 26.0 | 49.7 | 330 ms | 10.4 M | **0** |
+| **spring-rt** (coroutines + Spring Data R2DBC) ‡ | ~4,828 | 11 | 24 | 38 | — | 87 ms | _A/B_ | **0** |
 
 Per-second throughput sustained over 30 min: **spring-vt ≈ 11,973 req/s, rust-tokio
-≈ 11,081 req/s, go-pgx ≈ 10,081 req/s** — all three within ~18% of each other.
+≈ 11,081 req/s, go-pgx ≈ 10,081 req/s** — the three core runtimes within ~18% of
+each other. The ORM layers trail: **spring-data-jdbc ≈ 7,373** and **go-gorm ≈
+5,767 req/s** (the two repository/ORM abstractions), and **spring-rt furthest at
+≈ 4,828 req/s** (the reactive double-event-loop tax on 2 cores). All measured the
+same DB-bound `execute` path — the gap is the data layer, not the runtime.
+
+> † spring-data-jdbc was measured later, in its own fresh-boot 30-min `execute`
+> c=64 soak on the same box and identical config (pool 32, ZGC + 2 GB heap, epoll).
+> The run was reproducible (a second fresh-boot soak gave 7,172 req/s, &lt;3% apart),
+> 0 errors over 13.3 M requests. Loadavg spiked late in the run from background
+> kernel/desktop noise on this non-dedicated box, but it did not perturb the result
+> (tails stayed tight: p99 15 ms, max 650 ms).
+>
+> ‡ spring-rt has **no 30-min soak yet** — this row is a **60-second same-session
+> A/B** (c=64, pool 32, tuned: epoll + direct executor + compact headers), 2 reps
+> averaged (4,573 & 5,083 req/s), 0 errors. It's the slowest stack here and the gap
+> is **structural**: each reactive `save()` is a 3-round-trip transaction, and on 2
+> cores the reactive cross-event-loop handoff latency exceeds virtual-thread
+> park/unpark — confirmed by profiling (`itimer`/`wall`/`alloc`). Tuning lifted it
+> +28% over the un-tuned baseline (~3,757 req/s) but can't close the structural gap.
+> A 30-min soak will replace this A/B number.
 
 ### Why the three are so close — it becomes DB-bound
 
@@ -139,6 +184,39 @@ What still separates them at sustained steady state:
   recycling add steady overhead over a long run).
 - **spring-vt — highest sustained throughput** (HikariCP at pool 32, no mid-run
   connection churn, on virtual threads).
+
+### Spring Data JDBC vs JdbcClient — the abstraction cost
+
+spring-data-jdbc is spring-vt with **one** thing changed: Spring's fluent
+`JdbcClient` is replaced by the **Spring Data JDBC repository abstraction**
+(entities + `CrudRepository.save()`). Same gRPC contract, same SQL, same HikariCP
+pool, same virtual-thread + epoll + heap config. So the gap is purely what the
+repository layer costs.
+
+It is large. Over the 30-min soak, **7,373 vs 11,973 req/s — ~38% lower
+throughput** than `JdbcClient`. In a back-to-back **60-second same-session A/B on a
+small (runtime-bound) table**, where the DB is *not* yet the wall, the gap is even
+starker: **7,657 vs 19,264 req/s (~60% lower)**. The soak compresses the gap
+because both stacks spend the back half waiting on the same growing database; the
+A/B exposes the abstraction's raw CPU + round-trip cost.
+
+Why it's slower:
+
+- **`CrudRepository.save()` is `@Transactional` by default.** Even the "autocommit"
+  `Execute` insert becomes **BEGIN + INSERT + COMMIT — three DB round-trips** where
+  `JdbcClient`'s autocommit insert is **one**. That alone roughly triples the
+  per-insert DB chatter, and round-trips dominate on this hot path.
+- **Entity mapping CPU.** Each call pays reflection / `RowMapper` / immutable-record
+  reconstruction to turn a row into an entity and back — cheap individually, but it
+  bites at 2 cores under sustained load.
+- The UPSERT can't even use `save()` (Spring Data JDBC only INSERTs *or* UPDATEs),
+  so the conflict path is a native `@Modifying @Query` regardless — you take the
+  abstraction's overhead without it doing the hard part for you.
+
+**Takeaway:** on a write-hot, latency-sensitive path at low core count, prefer
+`JdbcClient` (spring-vt) over Spring Data JDBC repositories. Spring Data JDBC earns
+its keep where mapping richness and developer velocity matter more than peak write
+throughput — not on this engine's hot path.
 
 ---
 
@@ -161,6 +239,22 @@ Within that close race:
   worst-case latency matter most, and the team can carry Rust.
 - **go-pgx — solid but the weakest here.** Lowest sustained throughput and a
   3.5-second stall in this run.
+- **spring-data-jdbc — an abstraction tax, not a runtime one.** Same virtual-thread
+  Spring Boot as spring-vt, but the Spring Data JDBC repository layer cost it ~38%
+  throughput (7,373 vs 11,973 req/s) by turning every autocommit insert into a
+  3-round-trip transaction. If you go Spring + VT, use `JdbcClient`, not Spring Data
+  JDBC repositories, on the write hot path.
+- **go-gorm — the same lesson on the Go side, and the steepest tax in the suite.**
+  Same goroutines + pgx wire as go-pgx, but the GORM ORM cost it **~43%** (5,767 vs
+  10,081 req/s) — GORM's default per-`Create` transaction (BEGIN/COMMIT) plus
+  reflection-based mapping. It even trails the JVM ORM (spring-data-jdbc 7,373). On
+  a write-hot Go service, reach for `pgx` directly, not GORM.
+- **spring-rt — last place, and it's the *model*, not just the abstraction.**
+  Reactive (coroutines + Spring Data R2DBC), fully tuned, still lands ≈4,828 req/s
+  (A/B). On 2 cores the reactive double-event-loop handoff costs more per op than a
+  virtual thread parking on blocking I/O — so reactive is the wrong tool for this
+  sub-millisecond-query, low-core-count shape. Profiling confirmed it's I/O-wait /
+  scheduling bound; tuning helped +28% but can't change the model's ceiling.
 
 **The bigger lever is the database, not the language.** Because sustained write
 throughput is Postgres-bound on this shape, the highest-impact work is on the DB
@@ -170,23 +264,30 @@ that right and any of these three runtimes will serve the engine well.
 
 ## Caveats (read before trusting any single number)
 
-- **n = 1 per stack** — one 30-minute run each. The spread (≤18%) is partly
-  Postgres/disk, not pure runtime.
+- **n = 1 per stack** — one 30-minute run each (spring-data-jdbc has n = 2,
+  &lt;3% apart). The spread (≤18% among the core three) is partly Postgres/disk,
+  not pure runtime.
 - **Non-dedicated box** — expect run-to-run variance; each soak ran on a fresh
-  reboot to equalize conditions.
+  reboot to equalize conditions. spring-data-jdbc's runs saw a late-run loadavg
+  spike from background OS/desktop activity (not the ACPI/`kacpi` storm seen on an
+  earlier boot); it left the measured tails clean, so the number stands.
 - **DB-bound by design** — these are *sustained* numbers on a single, growing
   table; they measure steady state, which here is dominated by Postgres.
 - spring-vt runs its tuned config (pool 32, epoll, 1 I/O thread, 2 GB heap,
   JdbcClient); reproduce via `scripts/soak_3stacks.sh` and `spring-vt/PROFILING.md`.
+- spring-data-jdbc reuses spring-vt's exact config and only swaps the data layer;
+  reproduce via `STACKS=spring-data-jdbc bash scripts/soak_3stacks.sh`.
 
 ## Layout
 
 ```
 proto/command.proto     shared gRPC contract
 sql/schema.sql          commands + workflow_state + outbox
-go-pgx/                 Go server
+go-pgx/                 Go server (raw pgx)
+go-gorm/                Go server, GORM ORM over pgx (modular: config/db/service/server/...)
 rust-tokio/             Rust server (modular src/)
 spring-vt/              Spring Boot gRPC + virtual threads + JdbcClient  (+ PROFILING.md)
+spring-data-jdbc/       Spring Boot gRPC + virtual threads + Spring Data JDBC repositories
 loadgen/                shared Go load generator
 scripts/                build_* , soak_3stacks.sh , run_benchmark.sh
 results/                JSON + summary.csv per run

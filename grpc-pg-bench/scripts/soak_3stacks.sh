@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# Sustained SOAK: go-pgx, rust-tokio, spring-vt — ONE AT A TIME, ~30 min each at
-# a fixed concurrency (c=64). Between every stack: TRUNCATE, wait for any
-# (auto)VACUUM to finish, and cool down until system load drops, so each run
-# starts from a clean, quiet box.
+# Sustained SOAK: go-pgx, rust-tokio, spring-vt, spring-data-jdbc — ONE AT A TIME,
+# ~30 min each at a fixed concurrency (c=64). Between every stack: TRUNCATE, wait
+# for any (auto)VACUUM to finish, and cool down until system load drops, so each
+# run starts from a clean, quiet box.
 #
-#   per stack = 3 modes x PER_MODE_DUR (default 10m) = 30 min
-#   pool=32, spring-vt = JdbcClient + epoll + 1 I/O thread + 2 GB heap (ZGC)
+#   per stack = MODES x PER_MODE_DUR (default execute @ 30m = 30 min)
+#   pool=32, the JVM stacks run epoll + 1 I/O thread + 2 GB heap (ZGC)
+#   Override which stack(s) to soak: STACKS="spring-data-jdbc" bash scripts/soak_3stacks.sh
+#   (reboot between stacks for parity — run one stack per boot).
 set -uo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
@@ -16,11 +18,14 @@ export PG_HOST=127.0.0.1 PG_PORT=5432 PG_DB=bench PG_USER=postgres PG_PASSWORD=s
 export DATABASE_URL="postgres://postgres:sam@127.0.0.1:5432/bench?sslmode=disable"
 export PG_POOL_MAX=32 PG_POOL_MIN=4
 JVM_OPTS=(-Xms2048m -Xmx2048m -XX:+UseZGC -XX:+AlwaysPreTouch)
+# spring-rt (reactive Spring Data R2DBC) adds compact object headers (JEP 519).
+SPRING_RT_JVM_OPTS=("${JVM_OPTS[@]}" -XX:+UseCompactObjectHeaders)
 C="${C:-64}"
 PER_MODE_DUR="${PER_MODE_DUR:-30m}"
 WARMUP="${WARMUP:-30s}"
 MODES=(execute)
-STACKS=(rust-tokio)
+# Default to the new stack for the post-reboot soak; override with STACKS=...
+STACKS=(${STACKS:-spring-data-jdbc})
 TS="$(date +%Y%m%d-%H%M%S)"
 OUT="$ROOT/results/soak-$TS"; mkdir -p "$OUT"
 SUMMARY="$OUT/summary.csv"
@@ -52,8 +57,11 @@ SRV_PID=""; PORT=""
 start_server(){
   case "$1" in
     go-pgx)     PORT=50051; LISTEN_ADDR=127.0.0.1:$PORT GOMAXPROCS=2 taskset -c 2,3 "$ROOT/bin/go-server"   >"$OUT/$1.server.log" 2>&1 & SRV_PID=$! ;;
+    go-gorm)    PORT=50054; LISTEN_ADDR=127.0.0.1:$PORT GOMAXPROCS=2 taskset -c 2,3 "$ROOT/bin/go-gorm-server" >"$OUT/$1.server.log" 2>&1 & SRV_PID=$! ;;
     rust-tokio) PORT=50053; LISTEN_ADDR=127.0.0.1:$PORT RUST_WORKER_THREADS=2 taskset -c 2,3 "$ROOT/bin/rust-server" >"$OUT/$1.server.log" 2>&1 & SRV_PID=$! ;;
     spring-vt)  PORT=50056; taskset -c 2,3 java "${JVM_OPTS[@]}" -jar "$ROOT/bin/spring-vt-bench.jar" >"$OUT/$1.server.log" 2>&1 & SRV_PID=$! ;;
+    spring-data-jdbc) PORT=50060; taskset -c 2,3 java "${JVM_OPTS[@]}" -jar "$ROOT/bin/spring-data-jdbc-bench.jar" >"$OUT/$1.server.log" 2>&1 & SRV_PID=$! ;;
+    spring-rt)  PORT=50058; taskset -c 2,3 java "${SPRING_RT_JVM_OPTS[@]}" -jar "$ROOT/bin/spring-rt-bench.jar" >"$OUT/$1.server.log" 2>&1 & SRV_PID=$! ;;
   esac
 }
 stop_server(){

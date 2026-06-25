@@ -1,0 +1,3 @@
+event=alloc mode=execute c=64 psecs=20
+JVM_OPTS=-Xms2048m -Xmx2048m -XX:+UseZGC -XX:+AlwaysPreTouch -XX:+UseCompactObjectHeaders
+PG_POOL_MAX=32 PG_POOL_MIN=8

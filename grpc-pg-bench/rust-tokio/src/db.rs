@@ -69,6 +69,7 @@ impl Db {
         Ok(())
     }
 
+    #[cfg_attr(feature = "hotpath", hotpath::measure)]
     async fn get(&self) -> Result<Object, Status> {
         self.pool.get().await.map_err(internal)
     }
@@ -76,6 +77,7 @@ impl Db {
     /// `Execute` hot path: one autocommit INSERT, returns the generated id.
     /// `prepare_cached` reuses the per-connection prepared statement, so after
     /// the first call on a connection there's no parse/plan round trip.
+    #[cfg_attr(feature = "hotpath", hotpath::measure)]
     pub async fn insert_command(
         &self,
         workflow_id: &str,

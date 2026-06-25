@@ -72,6 +72,20 @@
       <groupId>org.jetbrains.kotlinx</groupId>
       <artifactId>kotlinx-coroutines-reactor</artifactId>
     </dependency>
+    <!-- Linux epoll transport for grpc-netty. The *classes* jar must be on the
+         COMPILE classpath so GrpcServerConfig can reference Epoll*/EpollIoHandler
+         (otherwise only a transitive runtime dep); the classifier jar carries the
+         native .so. Versions managed by the Spring Boot 4.1 BOM (Netty 4.2.x). -->
+    <dependency>
+      <groupId>io.netty</groupId>
+      <artifactId>netty-transport-classes-epoll</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.netty</groupId>
+      <artifactId>netty-transport-native-epoll</artifactId>
+      <classifier>linux-x86_64</classifier>
+      <scope>runtime</scope>
+    </dependency>
   </dependencies>
 
   <build>

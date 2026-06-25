@@ -2,21 +2,16 @@ package com.beam.bench
 
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
-import org.springframework.context.annotation.Bean
-import org.springframework.transaction.ReactiveTransactionManager
-import org.springframework.transaction.reactive.TransactionalOperator
 
+/**
+ * Boot entry point. Spring Boot's Spring Data R2DBC auto-configuration scans this
+ * package for `@Table` entities and `CoroutineCrudRepository` interfaces and
+ * wires them to the R2DBC `ConnectionFactory`, and auto-configures an
+ * `R2dbcTransactionManager` that backs the `@Transactional` suspend function in
+ * [Db.executeTx]. No explicit beans needed.
+ */
 @SpringBootApplication
-class SpringRtApplication {
-    /**
-     * Boot auto-configures an R2dbcTransactionManager (a ReactiveTransactionManager)
-     * from the ConnectionFactory; wrap it in a TransactionalOperator for the
-     * coroutine `executeAndAwait` transaction in [Db.executeTx].
-     */
-    @Bean
-    fun transactionalOperator(rtm: ReactiveTransactionManager): TransactionalOperator =
-        TransactionalOperator.create(rtm)
-}
+class SpringRtApplication
 
 fun main(args: Array<String>) {
     runApplication<SpringRtApplication>(*args)
