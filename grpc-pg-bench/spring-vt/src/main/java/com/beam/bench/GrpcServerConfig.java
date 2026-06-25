@@ -12,6 +12,7 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.grpc.server.ServerBuilderCustomizer;
@@ -45,30 +46,37 @@ class GrpcServerConfig {
 
     private static final Logger log = LoggerFactory.getLogger(GrpcServerConfig.class);
 
+    // Netty I/O (worker) event-loop thread count — the single source of truth is
+    // application.properties (NETTY_IO_THREADS=1). Spring resolves this placeholder
+    // from the OS environment FIRST and only then from application.properties, so
+    // the perf A/B harness can still force 2 with `NETTY_IO_THREADS=2` in the env
+    // without editing the file. 0/blank => auto = cores/2 (1 under the taskset pin).
+    // This sizes the WORKER group only; the boss/accept group is always 1.
+    @Value("${NETTY_IO_THREADS:0}")
+    private int configuredIoThreads;
+
     private EventLoopGroup boss;
     private EventLoopGroup worker;
 
     @Bean
     ServerBuilderCustomizer<NettyServerBuilder> tunedNettyServerExecutor() {
-        // availableProcessors() honours the taskset CPU affinity on Linux, so on
-        // the 2-core-pinned benchmark this is 2.
-        // NETTY_IO_THREADS overrides the worker event-loop size (default =
-        // cores visible under the taskset pin). Lets us A/B 1 vs 2 I/O threads.
-        // Default to cores/2 I/O threads: the handlers run on virtual threads, so
-        // the Netty event loop only does socket I/O + HTTP/2 framing. An A/B on
-        // the 2-core box showed 1 I/O thread beats 2 by up to +14% (and cuts p99
-        // ~30% at c=128). MECHANISM (perf-stat A/B, results/perf-cohost2-*): it is
-        // NOT fewer context switches — those stayed ~flat (~18k/s, ~6-7 per million
-        // instructions) whether 1 or 2 I/O threads, because ctx switches are driven
-        // by virtual-thread park/unpark on the blocking JDBC round-trips, not by the
-        // event loops. The real cost of a 2nd I/O thread is CACHE LOCALITY: two event
-        // loops split across cores 2,3 bounce connection/buffer state between the two
-        // cores' caches → IPC -6% (0.483→0.454) and cache-misses +10%. On this
-        // DB-bound path rps looks identical (Postgres is the wall), but 1 I/O thread
-        // is the more CPU-efficient choice. cores/2 → 1 on 2 cores, 2 on 4 cores.
-        String ioEnv = System.getenv("NETTY_IO_THREADS");
-        int ioThreads = (ioEnv != null && !ioEnv.isBlank())
-                ? Integer.parseInt(ioEnv.trim())
+        // I/O-thread count comes from application.properties (NETTY_IO_THREADS=1),
+        // injected above; 0 means auto = cores/2. availableProcessors() honours the
+        // taskset CPU affinity on Linux, so cores/2 is 1 on the 2-core-pinned box.
+        // Why 1: the handlers run on virtual threads, so the Netty event loop only
+        // does socket I/O + HTTP/2 framing. An A/B on the 2-core box showed 1 I/O
+        // thread beats 2 by up to +14% (and cuts p99 ~30% at c=128). MECHANISM
+        // (perf-stat A/B, results/perf-cohost2-*): it is NOT fewer context switches —
+        // those stayed ~flat (~18k/s, ~6-7 per million instructions) whether 1 or 2
+        // I/O threads, because ctx switches are driven by virtual-thread park/unpark
+        // on the blocking JDBC round-trips, not by the event loops. The real cost of
+        // a 2nd I/O thread is CACHE LOCALITY: two event loops split across cores 2,3
+        // bounce connection/buffer state between the two cores' caches → IPC -6%
+        // (0.483→0.454) and cache-misses +10%. On this DB-bound path rps looks
+        // identical (Postgres is the wall), but 1 I/O thread is the more CPU-efficient
+        // choice. cores/2 → 1 on 2 cores, 2 on 4 cores.
+        int ioThreads = configuredIoThreads > 0
+                ? configuredIoThreads
                 : Math.max(1, Runtime.getRuntime().availableProcessors() / 2);
         // NETTY_TRANSPORT=nio forces NIO even on Linux — lets us A/B the same
         // binary (epoll vs nio) back-to-back in one session to control for

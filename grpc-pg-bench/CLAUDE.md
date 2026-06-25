@@ -306,14 +306,20 @@ WARMUP=15s DURATION=60s ./scripts/run_benchmark.sh
   gRPC stays on `spring.grpc.server.port`. With virtual threads on, Jetty routes
   requests via its `VirtualThreadPool`, so it adds only ~3 platform threads
   (MasterPoller + acceptor), NOT a `qtp` worker pool — that's why we picked Jetty
-  over Tomcat (whose default is max-threads=200). NOTE two inert keys in
-  `application.properties`, kept as the user wrote them: (1)
-  `spring.grpc.server.netty.boss-threads/worker-threads` are dead — `GrpcServerConfig`'s
-  `ServerBuilderCustomizer` builds the event-loop groups directly and overrides
-  property-based config (it already runs boss=1/worker=cores/2=1 on the
-  `taskset -c 2,3` pin); (2) `io.netty.allocator.type=pooled` is a Netty *system*
-  property that only works as a `-D` JVM arg (set in `SPRING_VT_JVM_OPTS`), not
-  from `application.properties`. **spring-vt has its own `SPRING_VT_JVM_OPTS`**
+  over Tomcat (whose default is max-threads=200). **Netty I/O (worker) threads = 1
+  is set by `NETTY_IO_THREADS=1` in `application.properties`, read by
+  `GrpcServerConfig` via `@Value("${NETTY_IO_THREADS:0}")`** (0 => auto cores/2).
+  Spring orders the OS environment ABOVE `application.properties`, so the perf A/B
+  harness still forces 2 with an env var of the same name — verified: file-only →
+  `io threads=1`, env `NETTY_IO_THREADS=2` → `io threads=2`. This made the count
+  explicit (was `cores/2`, which is 1 only under the taskset pin; bare on the
+  12-core box it was 6). NOTE the surviving inert keys in `application.properties`,
+  kept for documentation: (1) `spring.grpc.server.netty.boss-threads/worker-threads`
+  are dead — `GrpcServerConfig`'s `ServerBuilderCustomizer` builds the event-loop
+  groups directly (boss always 1; worker = the NETTY_IO_THREADS value) and overrides
+  property-based Netty config; (2) `io.netty.allocator.type=pooled` is a Netty
+  *system* property that only works as a `-D` JVM arg (set in `SPRING_VT_JVM_OPTS`),
+  not from `application.properties`. **spring-vt has its own `SPRING_VT_JVM_OPTS`**
   (config.sh + the soak array): `-Xms/-Xmx2304m`, ZGC `ConcGCThreads=1` (protect
   the 2 vCPU), `+UseCompactObjectHeaders`, `MaxDirectMemorySize=768m`,
   `-Dio.netty.allocator.type=pooled` — a *different* JVM tune than the shared
