@@ -57,8 +57,15 @@ class GrpcServerConfig {
         // Default to cores/2 I/O threads: the handlers run on virtual threads, so
         // the Netty event loop only does socket I/O + HTTP/2 framing. An A/B on
         // the 2-core box showed 1 I/O thread beats 2 by up to +14% (and cuts p99
-        // ~30% at c=128) — fewer event loops means fewer cross-thread wakeups,
-        // the dominant cost in the profile. cores/2 → 1 on 2 cores, 2 on 4 cores.
+        // ~30% at c=128). MECHANISM (perf-stat A/B, results/perf-cohost2-*): it is
+        // NOT fewer context switches — those stayed ~flat (~18k/s, ~6-7 per million
+        // instructions) whether 1 or 2 I/O threads, because ctx switches are driven
+        // by virtual-thread park/unpark on the blocking JDBC round-trips, not by the
+        // event loops. The real cost of a 2nd I/O thread is CACHE LOCALITY: two event
+        // loops split across cores 2,3 bounce connection/buffer state between the two
+        // cores' caches → IPC -6% (0.483→0.454) and cache-misses +10%. On this
+        // DB-bound path rps looks identical (Postgres is the wall), but 1 I/O thread
+        // is the more CPU-efficient choice. cores/2 → 1 on 2 cores, 2 on 4 cores.
         String ioEnv = System.getenv("NETTY_IO_THREADS");
         int ioThreads = (ioEnv != null && !ioEnv.isBlank())
                 ? Integer.parseInt(ioEnv.trim())

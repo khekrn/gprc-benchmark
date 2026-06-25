@@ -1,0 +1,14 @@
+
+ Performance counter stats for process id '16397':
+
+   109,857,925,202      instructions                                                            (83.29%)
+   229,505,692,250      cycles                                                                  (83.38%)
+    15,019,861,132      cache-references                                                        (83.33%)
+     3,010,470,487      cache-misses                                                            (83.31%)
+           732,757      context-switches                                                      
+            17,062      cpu-migrations                                                        
+    40,126,911,885      L1-dcache-loads                                                         (83.34%)
+     5,119,995,606      L1-dcache-load-misses                                                   (83.36%)
+
+      40.005186523 seconds time elapsed
+

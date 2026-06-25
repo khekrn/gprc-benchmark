@@ -1,0 +1,14 @@
+
+ Performance counter stats for process id '15948':
+
+   109,238,908,527      instructions                                                            (83.24%)
+   226,056,561,827      cycles                                                                  (83.32%)
+    14,469,199,588      cache-references                                                        (83.26%)
+     2,933,605,173      cache-misses                                                            (83.39%)
+           724,850      context-switches                                                      
+            17,297      cpu-migrations                                                        
+    38,987,919,896      L1-dcache-loads                                                         (83.46%)
+     4,931,964,610      L1-dcache-load-misses                                                   (83.33%)
+
+      40.005595304 seconds time elapsed
+

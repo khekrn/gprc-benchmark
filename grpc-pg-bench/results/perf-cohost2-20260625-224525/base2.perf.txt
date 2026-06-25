@@ -1,0 +1,14 @@
+
+ Performance counter stats for process id '17067':
+
+   110,015,978,541      instructions                                                            (83.22%)
+   230,564,503,232      cycles                                                                  (83.42%)
+    14,710,358,209      cache-references                                                        (83.45%)
+     2,961,738,800      cache-misses                                                            (83.32%)
+           745,996      context-switches                                                      
+            20,233      cpu-migrations                                                        
+    39,131,565,163      L1-dcache-loads                                                         (83.24%)
+     4,999,322,205      L1-dcache-load-misses                                                   (83.35%)
+
+      40.005999910 seconds time elapsed
+

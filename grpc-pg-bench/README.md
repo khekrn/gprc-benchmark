@@ -305,6 +305,39 @@ second stack present.
 *Reproduce:* build spring-vt, then `STACKS=spring-vt bash scripts/soak_3stacks.sh`
 (serves both servers) with `bash scripts/health_ping.sh` running alongside.
 
+### Chosen JVM tune (and the cache-miss / context-switch evidence)
+
+The co-host run uses a production-shaped, spring-vt-specific JVM tune
+(`SPRING_VT_JVM_OPTS` in `scripts/config.sh`):
+
+```
+-Xms2304m -Xmx2304m            # fixed heap; with 768m direct ≈ 3 GB, ~1 GB left for OS/native
+-XX:+UseZGC -XX:ConcGCThreads=1 # ZGC capped to 1 concurrent thread — protects the 2 vCPU
+-XX:MaxDirectMemorySize=768m   # bound Netty's pooled direct buffers (both servers)
+-XX:+AlwaysPreTouch            # front-load page faults so phase 1 isn't taxed by lazy commit
+-XX:+UseCompactObjectHeaders   # JEP 519, 8-byte vs 12-byte headers — smaller cache footprint
+-Dio.netty.allocator.type=pooled
+```
+
+Plus **1 Netty I/O thread** (`GrpcServerConfig`, `cores/2` on the 2-core pin). We
+verified the two cache-relevant choices with a hardware-counter A/B (`perf stat`,
+matched ~18k rps, repeat cell agrees to 0.25% so >0.5% deltas are real —
+[`results/perf-cohost2-*/FINDINGS.md`](results/perf-cohost2-20260625-224525/FINDINGS.md)):
+
+| setting | vs alternative | cache-misses / instr | IPC | context switches |
+|---|---|--:|--:|--:|
+| **compact headers ON** | vs OFF | **−2.0%** (L1 −3.1%) | **+1.0%** | flat |
+| **1 I/O thread** | vs 2 | **−10%** (80→73 M/s) | **+6%** (0.45→0.48) | flat |
+
+So the kept config is the one with the **fewest cache misses and best IPC**:
+compact headers ON + 1 I/O thread. Two corrections the data forced: (1) the 1-I/O-thread
+advantage is **cache locality**, not "fewer context switches" — a 2nd event loop bounces
+connection/buffer state between the two cores' caches (lower IPC, more misses), while
+context switches barely move; (2) the context-switch rate (~18k/s) is **workload-governed**
+— driven by virtual-thread park/unpark on the blocking JDBC round-trips, unchanged by
+either knob. On this DB-bound path the efficiency gains don't widen rps (Postgres is the
+wall), but they're the right defaults for a more CPU-bound or higher-core deployment.
+
 ## Caveats (read before trusting any single number)
 
 - **n = 1 per stack** — one 30-minute run each (spring-data-jdbc has n = 2,

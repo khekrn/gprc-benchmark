@@ -324,6 +324,22 @@ WARMUP=15s DURATION=60s ./scripts/run_benchmark.sh
   the soak. Co-host result: −2.1% gRPC rps, p99 flat, p99.9 −27%, 0 errors, and
   `/health` p99 11.5 ms with 0 stalls under full gRPC saturation. README has the
   table under "Co-hosting REST + gRPC in one service".
+- **Cache-miss + ctx-switch perf-stat A/B (spring-vt, `results/perf-cohost2-*`,
+  needs `perf_event_paranoid<=2`; re-run via `scratchpad/perf_ab2.sh`-style 4-cell
+  harness — base/nohdr/io2/base2 at matched ~18k rps, base↔base2 agree to 0.25% so
+  >0.5% deltas are real).** Three takeaways: (1) **compact headers (JEP 519) are a
+  real but modest cache win** — −2.0% cache-misses/instruction, −3.1% L1-misses/instr,
+  +1.0% IPC (modest because the path is DB-round-trip bound, small per-request heap
+  footprint). (2) **1-vs-2 I/O threads is a cache-locality story, NOT a context-switch
+  one** — see GrpcServerConfig's comment; ctx switches stayed ~flat, IPC dropped 6%
+  and cache-misses rose 10% with a 2nd loop. (3) **ctx-switch rate (~18k/s, ~6-7 per
+  million instr) is workload-governed, not knob-governed** — driven by virtual-thread
+  park/unpark on the blocking JDBC round-trips, unchanged by headers or I/O-thread
+  count; the lever for fewer ctx switches is fewer DB round-trips, not thread tuning.
+  Caveat: this CPU returns `<not supported>` for LLC-load/miss PMU events; `cache-misses`
+  (generic LLC-miss proxy) and L1-dcache events do count. Context switches are also
+  readable without the PMU via `pidstat -w -t` (sum threads) — but perf's
+  `context-switches` is the thread-inclusive counter we used.
 - **Raw SQL everywhere; only the placeholder syntax differs.** The reactive
   stacks use `$1`-style (vertx-pg-client); the JDBC stacks use `?` (pgjdbc).
   Statements/plans are identical. JDBC stacks pass `prepareThreshold=1` so

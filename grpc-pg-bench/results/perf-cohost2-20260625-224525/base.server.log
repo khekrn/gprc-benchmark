@@ -1,0 +1,41 @@
+2026-06-25T22:45:41.236+05:30  INFO 15948 --- [spring-vt-bench] [           main] com.beam.bench.SpringVtApplication       : Starting SpringVtApplication v1.0.0 using Java 25.0.3 with PID 15948 (/home/coding2fun/khekrn/gprc-benchmark/grpc-pg-bench/bin/spring-vt-bench.jar started by coding2fun in /home/coding2fun/khekrn/gprc-benchmark/grpc-pg-bench)
+2026-06-25T22:45:41.243+05:30  INFO 15948 --- [spring-vt-bench] [           main] com.beam.bench.SpringVtApplication       : No active profile set, falling back to 1 default profile: "default"
+2026-06-25T22:45:43.022+05:30  INFO 15948 --- [spring-vt-bench] [           main] o.s.b.j.s.JettyServletWebServerFactory   : Server initialized with port: 8080
+2026-06-25T22:45:43.028+05:30  INFO 15948 --- [spring-vt-bench] [           main] org.eclipse.jetty.server.Server          : jetty-12.1.10; built: 2026-05-31T04:45:52.925Z; git: 986024525891c2c20ff08c58ba300dc3b9847586; jvm 25.0.3+9-LTS
+2026-06-25T22:45:43.069+05:30  INFO 15948 --- [spring-vt-bench] [           main] b.w.c.s.WebApplicationContextInitializer : Root WebApplicationContext: initialization completed in 1720 ms
+2026-06-25T22:45:43.145+05:30  INFO 15948 --- [spring-vt-bench] [           main] o.e.j.session.DefaultSessionIdManager    : Session workerName=node0
+2026-06-25T22:45:43.155+05:30  INFO 15948 --- [spring-vt-bench] [           main] o.e.jetty.server.handler.ContextHandler  : Started osbjs.JettyEmbeddedWebAppContext@1bf14704{application,/,b=file:///tmp/jetty-docbase.8080.1551821425268112095/,a=AVAILABLE,h=oeje11s.SessionHandler@5a545b0f{STARTED}}
+2026-06-25T22:45:43.156+05:30  INFO 15948 --- [spring-vt-bench] [           main] o.e.j.e.servlet.ServletContextHandler    : Started osbjs.JettyEmbeddedWebAppContext@1bf14704{application,/,b=file:///tmp/jetty-docbase.8080.1551821425268112095/,a=AVAILABLE,h=oeje11s.SessionHandler@5a545b0f{STARTED}}
+2026-06-25T22:45:43.157+05:30  INFO 15948 --- [spring-vt-bench] [           main] org.eclipse.jetty.server.Server          : Started oejs.Server@124dac75{STARTING}[12.1.10,sto=0] @130ms
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::loadLibrary has been called by io.netty.util.internal.NativeLibraryUtil in an unnamed module (jar:nested:/home/coding2fun/khekrn/gprc-benchmark/grpc-pg-bench/bin/spring-vt-bench.jar/!BOOT-INF/lib/netty-common-4.2.15.Final.jar!/)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+2026-06-25T22:45:43.415+05:30  INFO 15948 --- [spring-vt-bench] [           main] com.beam.bench.GrpcServerConfig          : grpc-netty transport: epoll (io threads=1)
+2026-06-25T22:45:43.916+05:30  INFO 15948 --- [spring-vt-bench] [           main] o.e.j.s.h.ContextHandler.application     : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-06-25T22:45:43.917+05:30  INFO 15948 --- [spring-vt-bench] [           main] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-06-25T22:45:43.919+05:30  INFO 15948 --- [spring-vt-bench] [           main] o.s.web.servlet.DispatcherServlet        : Completed initialization in 2 ms
+2026-06-25T22:45:43.968+05:30  INFO 15948 --- [spring-vt-bench] [           main] o.e.jetty.server.AbstractConnector       : Started oejs.ServerConnector@4cc12db2{HTTP/1.1, (http/1.1)}{0.0.0.0:8080}
+2026-06-25T22:45:43.971+05:30  INFO 15948 --- [spring-vt-bench] [           main] o.s.boot.jetty.JettyWebServer            : Jetty started on port 8080 (http/1.1) with context path '/'
+2026-06-25T22:45:44.042+05:30  INFO 15948 --- [spring-vt-bench] [           main] o.s.grpc.server.NettyGrpcServerFactory   : Registered gRPC service: bench.v1.CommandService
+2026-06-25T22:45:44.042+05:30  INFO 15948 --- [spring-vt-bench] [           main] o.s.grpc.server.NettyGrpcServerFactory   : Registered gRPC service: grpc.reflection.v1.ServerReflection
+2026-06-25T22:45:44.042+05:30  INFO 15948 --- [spring-vt-bench] [           main] o.s.grpc.server.NettyGrpcServerFactory   : Registered gRPC service: grpc.health.v1.Health
+2026-06-25T22:45:44.136+05:30  INFO 15948 --- [spring-vt-bench] [           main] o.s.g.s.lifecycle.GrpcServerLifecycle    : gRPC Server started, listening on address: [/[0:0:0:0:0:0:0:0]:50056], port: 50056
+2026-06-25T22:45:44.146+05:30  INFO 15948 --- [spring-vt-bench] [           main] com.beam.bench.SpringVtApplication       : Started SpringVtApplication in 3.564 seconds (process running for 5.807)
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::arrayBaseOffset has been called by com.google.protobuf.UnsafeUtil (jar:nested:/home/coding2fun/khekrn/gprc-benchmark/grpc-pg-bench/bin/spring-vt-bench.jar/!BOOT-INF/lib/protobuf-java-4.34.2.jar!/)
+WARNING: Please consider reporting this to the maintainers of class com.google.protobuf.UnsafeUtil
+WARNING: sun.misc.Unsafe::arrayBaseOffset will be removed in a future release
+2026-06-25T22:45:44.705+05:30  INFO 15948 --- [spring-vt-bench] [    virtual-140] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-06-25T22:45:44.922+05:30  INFO 15948 --- [spring-vt-bench] [    virtual-140] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@1870af0e
+2026-06-25T22:45:44.924+05:30  INFO 15948 --- [spring-vt-bench] [    virtual-140] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-06-25T22:47:44.686+05:30  INFO 15948 --- [spring-vt-bench] [ionShutdownHook] o.s.g.s.lifecycle.GrpcServerLifecycle    : Completed gRPC server shutdown
+2026-06-25T22:47:44.689+05:30  INFO 15948 --- [spring-vt-bench] [ionShutdownHook] o.s.boot.jetty.GracefulShutdown          : Commencing graceful shutdown. Waiting for active requests to complete
+2026-06-25T22:47:44.691+05:30  INFO 15948 --- [spring-vt-bench] [ jetty-shutdown] o.s.boot.jetty.GracefulShutdown          : Graceful shutdown complete
+2026-06-25T22:47:44.695+05:30  INFO 15948 --- [spring-vt-bench] [ionShutdownHook] o.e.jetty.server.AbstractConnector       : Stopped oejs.ServerConnector@4cc12db2{HTTP/1.1, (http/1.1)}{0.0.0.0:8080}
+2026-06-25T22:47:44.701+05:30  INFO 15948 --- [spring-vt-bench] [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...
+2026-06-25T22:47:44.714+05:30  INFO 15948 --- [spring-vt-bench] [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.
+2026-06-25T22:47:44.718+05:30  INFO 15948 --- [spring-vt-bench] [ionShutdownHook] org.eclipse.jetty.server.Server          : Stopped oejs.Server@124dac75{STOPPING}[12.1.10,sto=0]
+2026-06-25T22:47:44.723+05:30  INFO 15948 --- [spring-vt-bench] [ionShutdownHook] o.e.j.s.h.ContextHandler.application     : Destroying Spring FrameworkServlet 'dispatcherServlet'
+2026-06-25T22:47:44.725+05:30  INFO 15948 --- [spring-vt-bench] [ionShutdownHook] o.e.j.e.servlet.ServletContextHandler    : Stopped osbjs.JettyEmbeddedWebAppContext@1bf14704{application,/,b=file:///tmp/jetty-docbase.8080.1551821425268112095/,a=AVAILABLE,h=oeje11s.SessionHandler@5a545b0f{STOPPED}}

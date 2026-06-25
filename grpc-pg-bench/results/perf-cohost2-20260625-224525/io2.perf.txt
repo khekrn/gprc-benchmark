@@ -1,0 +1,14 @@
+
+ Performance counter stats for process id '16739':
+
+   108,003,077,756      instructions                                                            (83.31%)
+   237,637,193,984      cycles                                                                  (83.42%)
+    14,852,711,551      cache-references                                                        (83.49%)
+     3,215,150,485      cache-misses                                                            (83.30%)
+           647,633      context-switches                                                      
+             9,606      cpu-migrations                                                        
+    38,693,524,193      L1-dcache-loads                                                         (83.20%)
+     4,993,775,344      L1-dcache-load-misses                                                   (83.28%)
+
+      40.005720054 seconds time elapsed
+
