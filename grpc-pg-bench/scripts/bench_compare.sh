@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Head-to-head: run the SAME mixed workload (parallel execute + read/Redis) on
-# spring-vt and go-pgx back-to-back and print a side-by-side comparison. Both
-# stacks get the identical Redis read-through cache, SQL, concurrency, pool, and
-# 2-core pin — so the delta isolates the RUNTIME (JVM/virtual-threads/Netty/Lettuce
-# vs Go/goroutines/grpc-go/go-redis), not the design.
+# Head-to-head: run the SAME mixed workload (parallel execute + read/Redis +
+# co-hosted REST /health) on spring-vt, go-pgx and rust-tokio back-to-back and
+# print a side-by-side comparison. Every stack gets the identical Redis
+# read-through cache, SQL, concurrency, pool, co-hosted /health, and 2-core pin —
+# so the delta isolates the RUNTIME (JVM/virtual-threads/Netty/Lettuce vs
+# Go/goroutines/grpc-go/go-redis vs Rust/tokio/tonic/redis-rs), not the design.
 #
 # Each stack runs via scripts/bench_mixed.sh (truncates + flushes + seeds + warms
 # its own fresh state), with a cooldown-until-quiet between them. Run once on a
@@ -19,7 +20,7 @@ WARMUP="${WARMUP:-30s}"
 EXEC_C="${EXEC_C:-32}"
 READ_C="${READ_C:-32}"
 KEYSPACE="${KEYSPACE:-5000}"
-STACKS="${STACKS:-spring-vt go-pgx}"
+STACKS="${STACKS:-spring-vt go-pgx rust-tokio}"
 
 TS="$(date +%Y%m%d-%H%M%S)"
 BASE="$ROOT/results/compare-$TS"; mkdir -p "$BASE"

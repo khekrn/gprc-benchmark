@@ -347,6 +347,25 @@ func run() error {
 		}()
 	}
 
+	// Co-hosted REST /health (net/http) — fairness with spring-vt's Jetty and
+	// rust-tokio's axum. Served on a separate port on the same goroutine runtime
+	// (GOMAXPROCS), so the HTTP and gRPC surfaces contend for the same cores.
+	// Opt-in via HTTP_PORT (unset => gRPC-only, the original behaviour). A
+	// dedicated mux (not DefaultServeMux) so it never exposes the pprof handlers.
+	if httpPort := os.Getenv("HTTP_PORT"); httpPort != "" {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("UP"))
+		})
+		go func() {
+			slog.Info("co-hosted REST /health listening", "port", httpPort)
+			if err := http.ListenAndServe("0.0.0.0:"+httpPort, mux); err != nil {
+				slog.Warn("health http server stopped", "err", err)
+			}
+		}()
+	}
+
 	dsn := envOr("DATABASE_URL",
 		"postgres://bench:bench@127.0.0.1:5432/bench?sslmode=disable")
 	addr := envOr("LISTEN_ADDR", "127.0.0.1:50051")

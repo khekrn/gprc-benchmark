@@ -50,11 +50,12 @@ LG="$ROOT/bin/loadgen"
 [ -x "$LG" ] || { echo "build loadgen first"; exit 1; }
 
 # Per-stack: gRPC port, server start command, and whether it has a REST /health
-# (only spring-vt co-hosts one; go-pgx is gRPC-only so the health probe is skipped).
-HTTP_PORT=8080
+# All three co-host a REST /health on their own HTTP port (spring-vt=Jetty,
+# go-pgx=net/http, rust-tokio=axum) so the co-host cost is paid by every stack —
+# the health probe is pinged for all of them.
 case "$STACK" in
   spring-vt)
-    GRPC_PORT=50056; HAS_HEALTH=1
+    GRPC_PORT=50056; HTTP_PORT=8080; HAS_HEALTH=1
     JAR="$ROOT/bin/spring-vt-bench.jar"
     [ -f "$JAR" ] || { echo "build spring-vt first"; exit 1; }
     start_server(){
@@ -63,16 +64,26 @@ case "$STACK" in
         taskset -c 2,3 java "${JVM_OPTS[@]}" -jar "$JAR" > "$OUT/server.log" 2>&1 & SRV=$!
     } ;;
   go-pgx)
-    GRPC_PORT=50051; HAS_HEALTH=0
+    GRPC_PORT=50051; HTTP_PORT=8081; HAS_HEALTH=1
     BIN="$ROOT/bin/go-server"
     [ -x "$BIN" ] || { echo "build go-pgx first (scripts/build_go.sh)"; exit 1; }
     start_server(){
       REDIS_ENABLED=true REDIS_HOST=127.0.0.1 REDIS_PORT="$REDIS_PORT" \
-        DATABASE_URL="$DATABASE_URL" LISTEN_ADDR="127.0.0.1:$GRPC_PORT" GOMAXPROCS=2 \
+        DATABASE_URL="$DATABASE_URL" LISTEN_ADDR="127.0.0.1:$GRPC_PORT" HTTP_PORT="$HTTP_PORT" GOMAXPROCS=2 \
         PG_POOL_MAX=32 PG_POOL_MIN=4 \
         taskset -c 2,3 "$BIN" > "$OUT/server.log" 2>&1 & SRV=$!
     } ;;
-  *) echo "unknown STACK=$STACK (use spring-vt|go-pgx)"; exit 1 ;;
+  rust-tokio)
+    GRPC_PORT=50053; HTTP_PORT=8082; HAS_HEALTH=1
+    BIN="$ROOT/bin/rust-server"
+    [ -x "$BIN" ] || { echo "build rust-tokio first (scripts/build_rust.sh)"; exit 1; }
+    start_server(){
+      REDIS_ENABLED=true REDIS_HOST=127.0.0.1 REDIS_PORT="$REDIS_PORT" \
+        DATABASE_URL="$DATABASE_URL" LISTEN_ADDR="127.0.0.1:$GRPC_PORT" HTTP_PORT="$HTTP_PORT" \
+        RUST_WORKER_THREADS=2 PG_POOL_MAX=32 PG_POOL_MIN=4 \
+        taskset -c 2,3 "$BIN" > "$OUT/server.log" 2>&1 & SRV=$!
+    } ;;
+  *) echo "unknown STACK=$STACK (use spring-vt|go-pgx|rust-tokio)"; exit 1 ;;
 esac
 
 q(){ PGPASSWORD=sam psql "$DATABASE_URL" -tAc "$1" 2>/dev/null; }
