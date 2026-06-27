@@ -30,13 +30,12 @@ export PG_HOST=127.0.0.1 PG_PORT=5432 PG_DB=bench PG_USER=postgres PG_PASSWORD=s
 export DATABASE_URL="postgres://postgres:sam@127.0.0.1:5432/bench?sslmode=disable"
 export PG_POOL_MAX=32 PG_POOL_MIN=4
 
+STACK="${STACK:-spring-vt}"          # spring-vt | go-pgx
 DURATION="${DURATION:-60s}"
 WARMUP="${WARMUP:-20s}"
 EXEC_C="${EXEC_C:-32}"
 READ_C="${READ_C:-32}"
 KEYSPACE="${KEYSPACE:-5000}"
-GRPC_PORT=50056
-HTTP_PORT=8080
 REDIS_PORT="${REDIS_PORT:-6379}"
 export REDIS_POOL_ENABLED="${REDIS_POOL_ENABLED:-false}"
 
@@ -46,17 +45,41 @@ JVM_OPTS=(-Xms2304m -Xmx2304m -XX:+UseZGC -XX:ConcGCThreads=1
   -Dio.netty.allocator.type=pooled)
 
 TS="$(date +%Y%m%d-%H%M%S)"
-OUT="$ROOT/results/bench-mixed-$TS"; mkdir -p "$OUT"
+OUT="${OUT:-$ROOT/results/bench-mixed-$STACK-$TS}"; mkdir -p "$OUT"
 LG="$ROOT/bin/loadgen"
-JAR="$ROOT/bin/spring-vt-bench.jar"
 [ -x "$LG" ] || { echo "build loadgen first"; exit 1; }
-[ -f "$JAR" ] || { echo "build spring-vt first"; exit 1; }
+
+# Per-stack: gRPC port, server start command, and whether it has a REST /health
+# (only spring-vt co-hosts one; go-pgx is gRPC-only so the health probe is skipped).
+HTTP_PORT=8080
+case "$STACK" in
+  spring-vt)
+    GRPC_PORT=50056; HAS_HEALTH=1
+    JAR="$ROOT/bin/spring-vt-bench.jar"
+    [ -f "$JAR" ] || { echo "build spring-vt first"; exit 1; }
+    start_server(){
+      REDIS_ENABLED=true REDIS_HOST=127.0.0.1 REDIS_PORT="$REDIS_PORT" REDIS_POOL_ENABLED="$REDIS_POOL_ENABLED" \
+        HTTP_PORT="$HTTP_PORT" LISTEN_PORT="$GRPC_PORT" \
+        taskset -c 2,3 java "${JVM_OPTS[@]}" -jar "$JAR" > "$OUT/server.log" 2>&1 & SRV=$!
+    } ;;
+  go-pgx)
+    GRPC_PORT=50051; HAS_HEALTH=0
+    BIN="$ROOT/bin/go-server"
+    [ -x "$BIN" ] || { echo "build go-pgx first (scripts/build_go.sh)"; exit 1; }
+    start_server(){
+      REDIS_ENABLED=true REDIS_HOST=127.0.0.1 REDIS_PORT="$REDIS_PORT" \
+        DATABASE_URL="$DATABASE_URL" LISTEN_ADDR="127.0.0.1:$GRPC_PORT" GOMAXPROCS=2 \
+        PG_POOL_MAX=32 PG_POOL_MIN=4 \
+        taskset -c 2,3 "$BIN" > "$OUT/server.log" 2>&1 & SRV=$!
+    } ;;
+  *) echo "unknown STACK=$STACK (use spring-vt|go-pgx)"; exit 1 ;;
+esac
 
 q(){ PGPASSWORD=sam psql "$DATABASE_URL" -tAc "$1" 2>/dev/null; }
 rcli(){ redis-cli -p "$REDIS_PORT" "$@" 2>/dev/null; }
 wait_port(){ for _ in $(seq 1 120); do (exec 3<>/dev/tcp/127.0.0.1/"$1") 2>/dev/null && { exec 3>&- 3<&-; return 0; }; sleep 0.5; done; return 1; }
 
-echo "MIXED BENCH START $(date +%H:%M:%S)  dur=$DURATION warmup=$WARMUP exec_c=$EXEC_C read_c=$READ_C keyspace=$KEYSPACE pool=$REDIS_POOL_ENABLED  out=$OUT"
+echo "MIXED BENCH START $(date +%H:%M:%S)  stack=$STACK dur=$DURATION warmup=$WARMUP exec_c=$EXEC_C read_c=$READ_C keyspace=$KEYSPACE  out=$OUT"
 
 # --- Redis up? ---
 if ! wait_port "$REDIS_PORT"; then
@@ -77,15 +100,12 @@ PGPASSWORD=sam psql "$DATABASE_URL" -q -c \
 echo "  [seed] workflow_state rows: $(q 'select count(*) from workflow_state')"
 
 # --- Start server (Redis enabled) ---
-echo "  [up] starting spring-vt (REDIS_ENABLED=true, pool=$REDIS_POOL_ENABLED)"
-REDIS_ENABLED=true REDIS_HOST=127.0.0.1 REDIS_PORT="$REDIS_PORT" REDIS_POOL_ENABLED="$REDIS_POOL_ENABLED" \
-  HTTP_PORT="$HTTP_PORT" LISTEN_PORT="$GRPC_PORT" \
-  taskset -c 2,3 java "${JVM_OPTS[@]}" -jar "$JAR" > "$OUT/server.log" 2>&1 &
-SRV=$!
+echo "  [up] starting $STACK (REDIS_ENABLED=true) on :$GRPC_PORT"
+start_server
 trap 'kill -TERM $SRV 2>/dev/null; sleep 2; kill -KILL $SRV 2>/dev/null' EXIT
 if ! wait_port "$GRPC_PORT"; then echo "  server START_FAIL"; tail -20 "$OUT/server.log"; exit 1; fi
-wait_port "$HTTP_PORT" || true
-grep -E 'Redis read-through|Lettuce ClientResources' "$OUT/server.log" | sed 's/^/    /'
+[ "$HAS_HEALTH" = 1 ] && { wait_port "$HTTP_PORT" || true; }
+grep -iE 'Redis read-through|Lettuce ClientResources|redis read-through cache enabled' "$OUT/server.log" | sed 's/^/    /'
 
 # --- Pre-warm Redis: read pass over the keyspace so the cache is hot before measuring ---
 echo "  [warm] priming Redis cache (read pass ${WARMUP})"
@@ -105,14 +125,17 @@ PE=$!
 taskset -c 6,7 "$LG" -addr 127.0.0.1:"$GRPC_PORT" -c "$READ_C" -d "$DURATION" -warmup "$WARMUP" \
   -payload 256 -conns 4 -mode read -keyspace "$KEYSPACE" -out "$OUT/read.json" >/dev/null 2>&1 &
 PR=$!
-# Health probe every 1s for the whole window (warmup+duration).
-DUR_S=$(python3 -c "import re;s='$DURATION';w='$WARMUP';f=lambda x:int(re.sub('[^0-9]','',x))*(60 if x.strip().endswith('m') else 1);print(f(s)+f(w)+10)")
-DURATION="$DUR_S" PORT="$HTTP_PORT" INTERVAL=1 OUT="$OUT/health.csv" PIN_CPUS=0,1 \
-  bash "$ROOT/scripts/health_ping.sh" > "$OUT/health.log" 2>&1 &
-PH=$!
+# Health probe every 1s for the whole window (only the stack that has a REST /health).
+PH=""
+if [ "$HAS_HEALTH" = 1 ]; then
+  DUR_S=$(python3 -c "import re;s='$DURATION';w='$WARMUP';f=lambda x:int(re.sub('[^0-9]','',x))*(60 if x.strip().endswith('m') else 1);print(f(s)+f(w)+10)")
+  DURATION="$DUR_S" PORT="$HTTP_PORT" INTERVAL=1 OUT="$OUT/health.csv" PIN_CPUS=0,1 \
+    bash "$ROOT/scripts/health_ping.sh" > "$OUT/health.log" 2>&1 &
+  PH=$!
+fi
 
 wait $PE; wait $PR
-kill -TERM $PH 2>/dev/null; wait $PH 2>/dev/null || true
+[ -n "$PH" ] && { kill -TERM $PH 2>/dev/null; wait $PH 2>/dev/null || true; }
 
 # --- Redis hit ratio during the measured window (deltas) ---
 H1=$(rcli info stats | awk -F: '/keyspace_hits/{print $2+0}'); H1=${H1//[$'\r']/}
@@ -147,25 +170,22 @@ dh, dm = h1-h0, m1-m0
 hr = 100.0*dh/(dh+dm) if (dh+dm)>0 else 0.0
 print(f"-- redis (measured window) --")
 print(f"  hits={dh}  misses={dm}  hit_ratio={hr:.1f}%")
-# health
-import csv, statistics
-try:
+# health (only if this stack exposed /health)
+import os, csv
+hpath = f"{out}/health.csv"
+if os.path.exists(hpath):
     lat=[]; bad=0
-    with open(f"{out}/health.csv") as f:
-        for i,row in enumerate(csv.reader(f)):
-            if i==0: continue
-            if row[2]!='200': bad+=1
-            lat.append(float(row[3]))
+    for i,rw in enumerate(csv.reader(open(hpath))):
+        if i==0 or len(rw)<4: continue
+        if rw[2]!='200': bad+=1
+        lat.append(float(rw[3]))
     if lat:
-        lat.sort(); n=len(lat)
-        p=lambda q:lat[min(n-1,int(q*n))]
+        lat.sort(); n=len(lat); p=lambda q:lat[min(n-1,int(q*n))]
         print(f"-- /health (every 1s) --")
         print(f"  samples={n}  non200={bad}  p50={p(.5):.1f}  p99={p(.99):.1f}  max={lat[-1]:.1f} ms")
-except Exception as ex:
-    print(f"  health parse error: {ex}")
 PY
 {
-  echo "dur=$DURATION warmup=$WARMUP exec_c=$EXEC_C read_c=$READ_C keyspace=$KEYSPACE pool=$REDIS_POOL_ENABLED"
+  echo "stack=$STACK dur=$DURATION warmup=$WARMUP exec_c=$EXEC_C read_c=$READ_C keyspace=$KEYSPACE pool=$REDIS_POOL_ENABLED"
 } > "$OUT/params.txt"
 echo "========================================================"
 echo "MIXED BENCH DONE $(date +%H:%M:%S)  out=$OUT"

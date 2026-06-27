@@ -33,6 +33,8 @@ import (
 	"runtime"
 	"runtime/pprof"
 	"strconv"
+	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -40,6 +42,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
@@ -72,6 +75,55 @@ type server struct {
 	// a 2-core box that time.Now() shows up at a few % of the Execute CPU.
 	// OFF by default so the production response stays fully populated.
 	skipRecvTs bool
+	// rdb is the Redis read-through cache for workflow_state. nil unless
+	// REDIS_ENABLED=true, in which case GetState reads through it (the Go twin
+	// of spring-vt's RedisStateCache, for the runtime A/B). Same key format
+	// (wf:state:{id}) and compact value (version|micros|state) as spring-vt.
+	rdb           *redis.Client
+	cacheTTL      time.Duration
+	lastRedisWarn atomic.Int64 // ns of last warn, throttles a Redis-outage log to 1/s
+}
+
+func stateKey(workflowID string) string { return "wf:state:" + workflowID }
+
+// encodeState packs the row as version|micros|state (state last so it may
+// contain the delimiter), byte-identical to spring-vt's RedisStateCache format.
+func encodeState(version, micros int64, state string) string {
+	return strconv.FormatInt(version, 10) + "|" + strconv.FormatInt(micros, 10) + "|" + state
+}
+
+// decodeState parses an encodeState value; ok=false on malformed (treated as miss).
+func decodeState(workflowID, v string) (*benchv1.StateResponse, bool) {
+	p1 := strings.IndexByte(v, '|')
+	if p1 < 0 {
+		return nil, false
+	}
+	rest := v[p1+1:]
+	p2 := strings.IndexByte(rest, '|')
+	if p2 < 0 {
+		return nil, false
+	}
+	version, err1 := strconv.ParseInt(v[:p1], 10, 64)
+	micros, err2 := strconv.ParseInt(rest[:p2], 10, 64)
+	if err1 != nil || err2 != nil {
+		return nil, false
+	}
+	return &benchv1.StateResponse{
+		Found:           true,
+		WorkflowId:      workflowID,
+		State:           rest[p2+1:],
+		Version:         version,
+		UpdatedAtMicros: micros,
+	}, true
+}
+
+// warnRedis logs at most one WARN/second so a Redis outage can't flood the log.
+func (s *server) warnRedis(op string, err error) {
+	now := time.Now().UnixNano()
+	prev := s.lastRedisWarn.Load()
+	if now-prev > int64(time.Second) && s.lastRedisWarn.CompareAndSwap(prev, now) {
+		slog.Warn("redis op failed, degrading to postgres", "op", op, "err", err)
+	}
 }
 
 // fnv1a returns FNV-1a 32 over s, inlined over the string to avoid both the
@@ -158,6 +210,15 @@ func (s *server) ExecuteTx(ctx context.Context, req *benchv1.CommandRequest) (*b
 	}
 	committed = true
 
+	// workflow_state changed → evict the cached entry (cache-aside on write);
+	// next GetState repopulates from PG. Post-commit so a rolled-back TX never
+	// evicts. Best-effort; TTL is the backstop if this DEL is lost.
+	if s.rdb != nil {
+		if err := s.rdb.Del(ctx, stateKey(req.WorkflowId)).Err(); err != nil {
+			s.warnRedis("del", err)
+		}
+	}
+
 	return &benchv1.CommandResponse{
 		Id:               id,
 		Checksum:         checksum,
@@ -165,9 +226,22 @@ func (s *server) ExecuteTx(ctx context.Context, req *benchv1.CommandRequest) (*b
 	}, nil
 }
 
-// GetState is the dominant read shape: single SELECT by primary key.
-// updated_at is converted to micros server-side to skip TIMESTAMPTZ marshal.
+// GetState is the dominant read shape: single SELECT by primary key, read
+// THROUGH the Redis cache when enabled. updated_at is converted to micros
+// server-side to skip TIMESTAMPTZ marshal.
 func (s *server) GetState(ctx context.Context, req *benchv1.GetStateRequest) (*benchv1.StateResponse, error) {
+	// Cache lookup. A Redis error degrades to Postgres (never fails the RPC).
+	if s.rdb != nil {
+		v, err := s.rdb.Get(ctx, stateKey(req.WorkflowId)).Result()
+		if err == nil {
+			if resp, ok := decodeState(req.WorkflowId, v); ok {
+				return resp, nil
+			}
+		} else if err != redis.Nil {
+			s.warnRedis("get", err)
+		}
+	}
+
 	var state string
 	var version int64
 	var updatedAtMicros int64
@@ -178,6 +252,13 @@ func (s *server) GetState(ctx context.Context, req *benchv1.GetStateRequest) (*b
 			return &benchv1.StateResponse{Found: false, WorkflowId: req.WorkflowId}, nil
 		}
 		return nil, err
+	}
+	// Populate the cache for existing rows (misses are not cached). Best-effort.
+	if s.rdb != nil {
+		if err := s.rdb.Set(ctx, stateKey(req.WorkflowId),
+			encodeState(version, updatedAtMicros, state), s.cacheTTL).Err(); err != nil {
+			s.warnRedis("set", err)
+		}
 	}
 	return &benchv1.StateResponse{
 		Found:           true,
@@ -332,6 +413,32 @@ func run() error {
 		return fmt.Errorf("ping db: %w", pingErr)
 	}
 
+	// Optional Redis read-through cache for GetState (REDIS_ENABLED=true). The
+	// Go twin of spring-vt's RedisStateCache, for the runtime A/B. go-redis is
+	// the idiomatic Go client (pooled, synchronous) — the analog of Lettuce.
+	// Pool sized to the read concurrency so it doesn't head-of-line block reads
+	// (Lettuce multiplexes one connection; go-redis pools, so it needs ~conc
+	// connections to match). 500ms timeouts mirror spring.data.redis.timeout.
+	var rdb *redis.Client
+	cacheTTL := time.Duration(envIntOr("REDIS_TTL_SECONDS", 300)) * time.Second
+	if os.Getenv("REDIS_ENABLED") == "true" {
+		rdb = redis.NewClient(&redis.Options{
+			Addr:         envOr("REDIS_HOST", "127.0.0.1") + ":" + envOr("REDIS_PORT", "6379"),
+			PoolSize:     envIntOr("REDIS_POOL_SIZE", 32),
+			ReadTimeout:  500 * time.Millisecond,
+			WriteTimeout: 500 * time.Millisecond,
+		})
+		rPingCtx, rPingCancel := context.WithTimeout(rootCtx, 5*time.Second)
+		rPingErr := rdb.Ping(rPingCtx).Err()
+		rPingCancel()
+		if rPingErr != nil {
+			return fmt.Errorf("ping redis: %w", rPingErr)
+		}
+		defer rdb.Close()
+		slog.Info("redis read-through cache enabled",
+			"addr", rdb.Options().Addr, "pool_size", rdb.Options().PoolSize, "ttl", cacheTTL)
+	}
+
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("listen %s: %w", addr, err)
@@ -377,6 +484,8 @@ func run() error {
 	benchv1.RegisterCommandServiceServer(grpcServer, &server{
 		pool:       pool,
 		skipRecvTs: os.Getenv("SKIP_RECV_TS") == "1",
+		rdb:        rdb,
+		cacheTTL:   cacheTTL,
 	})
 
 	// Standard gRPC health service. The orchestrator could probe this if
