@@ -1,0 +1,6 @@
+HEALTH-PING http://127.0.0.1:8080/health every 1s (timeout 5s, pin 0,1)  -> /home/coding2fun/khekrn/gprc-benchmark/grpc-pg-bench/results/compare-20260627-142402/spring-vt/health.csv
+  will auto-stop after 1840s
+  [~] 2026-06-27T08:54:42Z slow ping 311.3ms
+
+=== health-ping summary (/home/coding2fun/khekrn/gprc-benchmark/grpc-pg-bench/results/compare-20260627-142402/spring-vt/health.csv) ===
+samples=1779  non200=0  avg=3.7ms  p50=3.2ms  p99=9.2ms  max=311.3ms

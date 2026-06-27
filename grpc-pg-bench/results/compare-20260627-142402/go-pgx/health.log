@@ -1,0 +1,5 @@
+HEALTH-PING http://127.0.0.1:8081/health every 1s (timeout 5s, pin 0,1)  -> /home/coding2fun/khekrn/gprc-benchmark/grpc-pg-bench/results/compare-20260627-142402/go-pgx/health.csv
+  will auto-stop after 1840s
+
+=== health-ping summary (/home/coding2fun/khekrn/gprc-benchmark/grpc-pg-bench/results/compare-20260627-142402/go-pgx/health.csv) ===
+samples=1783  non200=0  avg=1.2ms  p50=1.0ms  p99=3.7ms  max=20.1ms

@@ -1,0 +1,1 @@
+stack=rust-tokio dur=30m warmup=30s exec_c=32 read_c=32 keyspace=5000 pool=false

@@ -1,0 +1,5 @@
+[2m2026-06-27T09:59:09.161944Z[0m [32m INFO[0m [2mrust_tokio_bench[0m[2m:[0m redis read-through cache enabled [3mhost[0m[2m=[0m127.0.0.1 [3mport[0m[2m=[0m6379 [3mttl_secs[0m[2m=[0m300
+[2m2026-06-27T09:59:09.162025Z[0m [32m INFO[0m [2mrust_tokio_bench::server[0m[2m:[0m rust-tokio server listening [3maddr[0m[2m=[0m127.0.0.1:50053 [3mpool_min[0m[2m=[0m4 [3mpool_max[0m[2m=[0m32 [3mworkers[0m[2m=[0m2
+[2m2026-06-27T09:59:09.162181Z[0m [32m INFO[0m [2mrust_tokio_bench::server[0m[2m:[0m co-hosted REST /health (axum) listening [3mhttp_port[0m[2m=[0m8082
+[2m2026-06-27T10:30:15.824716Z[0m [32m INFO[0m [2mrust_tokio_bench::server[0m[2m:[0m shutdown signal received, draining in-flight RPCs
+[2m2026-06-27T10:30:15.824958Z[0m [32m INFO[0m [2mrust_tokio_bench::server[0m[2m:[0m graceful stop complete

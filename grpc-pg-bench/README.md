@@ -20,6 +20,39 @@ behaves under continuous load over time.
 > focused **3-stack soak** (plus data-layer/ORM variants — **spring-data-jdbc**,
 > **go-gorm**, **spring-rt** — compared against the raw-driver baselines).
 
+## ⭐ Headline — mixed read+write workload with a Redis cache (3-way, 30 min)
+
+The most production-shaped test: **`execute` (durable INSERT) and `GetState` run
+in parallel** against one server, where `GetState` is served **through a Redis
+read-through cache**, and each stack **co-hosts a REST `/health` endpoint** that is
+pinged throughout (Jetty for Java, axum for Rust, net/http for Go). Identical cache,
+SQL, concurrency (32 + 32), pool (32), and a **2-core pin** — so the delta is the
+**runtime**, not the design. 30 minutes each, same boot.
+([`results/compare-20260627-142402/`](results/compare-20260627-142402/))
+
+| runtime | combined rps | read rps | read p99 | write rps | write p99 |
+|---------|------------:|---------:|---------:|----------:|----------:|
+| **rust-tokio** (Rust, tonic, no GC) | **30,647** | **22,974** | **3.16 ms** | **7,673** | **7.58 ms** |
+| **go-pgx** (Go, grpc-go) | 18,594 | 12,711 | 6.35 ms | 5,883 | 10.22 ms |
+| **spring-vt** (Java 25, virtual threads) | 17,606 | 10,578 | 6.14 ms | 7,028 | 9.56 ms |
+
+**What it says:**
+- **Rust wins both paths and the tail** — +74% combined over Java, read throughput
+  **2.2×** Java's at **half** the p99, and it even edges Java on the durable write path.
+- **"Not the JVM" (Go) buys ~+20% on reads; "no GC + zero-alloc native" (Rust) buys
+  ~2.2×.** Most of the headroom is the GC/managed-runtime/allocation tax that Go still
+  pays and Rust doesn't — not simply native-vs-JVM. The read path (transport-bound)
+  separates the runtimes; the write path (Postgres-round-trip bound) stays tight, where
+  Java actually beats Go.
+- Errors were **negligible and transient** across all three (~0.01%, transport blips
+  under core contention — they flip between stacks/runs, so they're noise, not a stack
+  property) and are omitted here.
+
+**Which to pick — see the [Verdict](#verdict-2-core-target-workflow-engine-hot-path)
+below:** Rust for maximum throughput/tail-per-core; **spring-vt for the best
+performance-vs-developer-productivity balance** on a write/durability-bound workflow
+engine (within ~9% of Rust on the write path that bounds it, with the richest ecosystem).
+
 ## The stacks
 
 - **go-pgx** — Go + `google.golang.org/grpc` + `jackc/pgx` (pgxpool). The native
