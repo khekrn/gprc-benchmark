@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Same-session efficiency comparison: go-pgx vs optimized spring-vt.
 #   go : bin/go-server        (GOMAXPROCS=2, pgxpool 4/16)             port 50051
-#   svt: spring-vt-bench.jar   (epoll + 1 I/O thread + 2 GB, raw JDBC)  port 50056
+#   svt: spring-vt-bench.jar   (epoll + 1 I/O thread + 2 GB, Spring JdbcClient)  port 50056
 # Both server-pinned to 2 cores (2,3), client to 4,5. Interleaved per (mode,c).
 #
 # Focus: CPU / latency / throughput (memory deliberately ignored — compute is
