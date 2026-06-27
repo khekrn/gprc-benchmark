@@ -139,6 +139,7 @@ type Result struct {
 	LatMeanMs    float64 `json:"lat_mean_ms"`
 	LatP50Ms     float64 `json:"lat_p50_ms"`
 	LatP90Ms     float64 `json:"lat_p90_ms"`
+	LatP95Ms     float64 `json:"lat_p95_ms"`
 	LatP99Ms     float64 `json:"lat_p99_ms"`
 	LatP999Ms    float64 `json:"lat_p999_ms"`
 	LatMaxMs     float64 `json:"lat_max_ms"`
@@ -151,11 +152,13 @@ type Result struct {
 	ReadRPS      float64 `json:"read_rps"`
 	WriteP50Ms   float64 `json:"write_p50_ms"`
 	WriteP90Ms   float64 `json:"write_p90_ms"`
+	WriteP95Ms   float64 `json:"write_p95_ms"`
 	WriteP99Ms   float64 `json:"write_p99_ms"`
 	WriteP999Ms  float64 `json:"write_p999_ms"`
 	WriteMaxMs   float64 `json:"write_max_ms"`
 	ReadP50Ms    float64 `json:"read_p50_ms"`
 	ReadP90Ms    float64 `json:"read_p90_ms"`
+	ReadP95Ms    float64 `json:"read_p95_ms"`
 	ReadP99Ms    float64 `json:"read_p99_ms"`
 	ReadP999Ms   float64 `json:"read_p999_ms"`
 	ReadMaxMs    float64 `json:"read_max_ms"`
@@ -314,6 +317,7 @@ func runPhase(cfg phaseConfig) Result {
 			res.LatMeanMs = sum / float64(len(all))
 			res.LatP50Ms = pct(all, 50)
 			res.LatP90Ms = pct(all, 90)
+			res.LatP95Ms = pct(all, 95)
 			res.LatP99Ms = pct(all, 99)
 			res.LatP999Ms = pct(all, 99.9)
 			res.LatMaxMs = all[len(all)-1]
@@ -328,6 +332,7 @@ func runPhase(cfg phaseConfig) Result {
 			sort.Float64s(allWrites)
 			res.WriteP50Ms = pct(allWrites, 50)
 			res.WriteP90Ms = pct(allWrites, 90)
+			res.WriteP95Ms = pct(allWrites, 95)
 			res.WriteP99Ms = pct(allWrites, 99)
 			res.WriteP999Ms = pct(allWrites, 99.9)
 			res.WriteMaxMs = allWrites[len(allWrites)-1]
@@ -340,6 +345,7 @@ func runPhase(cfg phaseConfig) Result {
 			sort.Float64s(allReads)
 			res.ReadP50Ms = pct(allReads, 50)
 			res.ReadP90Ms = pct(allReads, 90)
+			res.ReadP95Ms = pct(allReads, 95)
 			res.ReadP99Ms = pct(allReads, 99)
 			res.ReadP999Ms = pct(allReads, 99.9)
 			res.ReadMaxMs = allReads[len(allReads)-1]

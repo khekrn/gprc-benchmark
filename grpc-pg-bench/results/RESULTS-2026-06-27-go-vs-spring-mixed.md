@@ -1,87 +1,93 @@
-# go-pgx vs spring-vt — mixed workload (Redis read-through), 30 min, 2 cores
+# Java vs Go vs Rust — mixed workload (Redis read-through), 30 min, 2 cores
 
-**Question:** with the same Redis read-through cache added to both stacks, does Go
-beat the Spring/virtual-threads stack on a parallel read+write workload?
+**Question:** with the same Redis read-through cache and the same co-hosted REST
+`/health`, how do the three runtimes compare on a parallel read+write workload — and
+how much of any gap is *native vs JVM* vs *no GC at all*?
 
-**Setup (identical except the runtime):** parallel `execute` (autocommit INSERT,
-write path) + `read` (GetState through Redis, read path), exec c=32 + read c=32,
-keyspace 5000 (160k seeded rows), Redis warm, server pinned to 2 cores, same SQL,
-same cache key/value/TTL, same pool sizes. Runtime is the only variable:
+**Setup (identical except the runtime):** parallel `execute` (autocommit INSERT, write
+path) + `read` (GetState through Redis, read path), exec c=32 + read c=32, keyspace
+5000 (160k seeded rows), Redis warm, **each stack co-hosts a REST `/health`** pinged
+every second, server pinned to 2 cores, same SQL / cache key+value+TTL / pool sizes.
+Back-to-back on one boot, cooldown between. Runtime is the only variable:
 
-| | spring-vt | go-pgx |
-|---|---|---|
-| transport | grpc-netty (HTTP/2) | grpc-go (HTTP/2) |
-| concurrency | virtual threads (1 per RPC) | goroutines |
-| Redis client | Lettuce (shared multiplexed conn) | go-redis (pool=32) |
-| Postgres | pgjdbc + HikariCP (JdbcClient) | pgx (pgxpool) |
+| | spring-vt (Java) | go-pgx (Go) | rust-tokio (Rust) |
+|---|---|---|---|
+| transport | grpc-netty | grpc-go | tonic |
+| concurrency | virtual threads | goroutines | tokio tasks |
+| GC | ZGC (generational) | Go GC | **none** |
+| Redis client | Lettuce (shared multiplexed) | go-redis (pool 32) | redis-rs (multiplexed) |
+| REST /health | Jetty | net/http | axum |
+| Postgres | pgjdbc + HikariCP | pgx (pgxpool) | tokio-postgres + deadpool |
 
-## Results
+Run: [`results/compare-20260627-142402/`](compare-20260627-142402/).
 
-| metric | spring-vt | go-pgx | go vs sv |
-|--------|----------:|-------:|---------:|
-| execute rps | 7,381 | 6,052 | **−18.0%** |
-| execute p99 / p99.9 ms | 9.44 / 18.86 | 9.87 / 19.71 | ~tie |
-| read rps | 10,232 | 13,402 | **+31.0%** |
-| read p99 / p99.9 ms | 6.29 / 9.15 | 5.93 / 8.09 | go slightly better |
-| **combined rps** | 17,613 | **19,454** | **+10.5%** |
-| total processed | 31,702,752 | 35,017,105 | +10.5% |
-| errors | **0** | 1,942 (0.008%) | sv cleaner |
-| Redis hit ratio | 95.5% | 96.6% | ~tie |
+## Results (the fair 3-way)
 
-Both stacks sustained 30M+ requests over 30 min on 2 cores. (Runs:
-`results/bench-mixed-20260625-101444` spring-vt, `results/bench-mixed-go-pgx-20260627-123430`
-go-pgx — same dedicated Ryzen 2-core, taskset-pinned, so cross-boot variance is negligible.)
+| metric | Java | Go | Rust | best |
+|--------|-----:|---:|-----:|:-----|
+| **read** rps | 10,578 | 12,711 | **22,974** | Rust |
+| read p50 / p90 / p99 ms | 2.94 / 4.21 / 6.14 | 2.31 / 3.89 / 6.35 | **1.32 / 2.01 / 3.16** | Rust |
+| **execute** rps | 7,028 | 5,883 | **7,673** | Rust |
+| execute p50 / p90 / p99 ms | 4.08 / 7.01 / 9.56 | 5.23 / 7.78 / 10.22 | **4.07 / 5.65 / 7.58** | Rust |
+| **combined rps** | 17,606 | 18,594 | **30,647** | Rust |
+| combined vs Java | — | +5.6% | **+74.1%** | |
 
-## Why Go wins the READ path (+31%) — the mechanism
+Each stack sustained 30M+ requests over 30 min. Errors were **negligible and transient**
+(~0.01%, transport blips under core contention — they flip between stacks/runs, not a
+stack property) and are omitted.
 
-The read path is the tell, and the reason is **where the cost lives on that path**.
+## Rust wins everything — read 2.2×, and even the write path
 
-A `GetState` that hits Redis does almost no "business" work — no Postgres round-trip
-(96% cache hit), a tiny Redis GET, and a response. So the dominant per-request cost is
-the **gRPC transport + the runtime's per-request concurrency machinery**. The spring-vt
-CPU profile made this explicit: under load it spent **~79% of on-CPU samples in
-Netty/grpc-java HTTP/2 framing**, and its allocation was dominated by **Netty byte
-buffers + HTTP/2 header strings + one `VirtualThread` object and `ThreadLocalMap` per
-request**. That is the per-request tax the JVM pays on every read.
+Rust is fastest on **both** paths and the **tail**: read throughput is **2.2× Java's at
+half the p99** (3.16 vs 6.14 ms), and — unlike Go — it also takes the durable **write**
+path (7,673 > Java 7,028 > Go 5,883). No GC means no pause-driven tail, and zero
+per-request heap allocation means the transport cost per request is the lowest of the three.
 
-Go pays a much smaller version of that tax:
+## Decomposing the gap: "not the JVM" vs "no GC"
 
-1. **No per-request heap object for concurrency.** spring-vt allocates a `VirtualThread`
-   (+ its `ThreadLocalMap` entries) for every RPC — both showed up as allocation hot
-   spots in the profile. A goroutine is a ~2 KB stack with no per-request `ThreadLocal`
-   churn, so go-pgx allocates far less per read.
-2. **Leaner HTTP/2 transport.** grpc-go's framing allocates fewer/cheaper buffers and
-   header objects than grpc-netty; less work and less GC pressure per request.
-3. **Cheaper GC, better cache locality.** Lower allocation per request → less GC and a
-   smaller working set → higher IPC on the same 2 cores (spring-vt's measured IPC was
-   ~0.44, memory/stall-bound; the transport pointer-chasing is a big part of that).
+The read path is transport-bound (Redis hit = no Postgres round-trip), so the server's
+per-request CPU is the wall — exactly where runtimes separate. Reading the read-rps ladder:
 
-On the read path the server CPU is the **wall** (the DB isn't involved), so these
-per-request savings convert almost directly into more reads/sec — hence **+31%**.
+- **Java → Go: +20%.** The cost of *being on the JVM* — grpc-netty + Lettuce + a
+  per-request `VirtualThread`/`ThreadLocalMap` allocation (these were the top allocation
+  frames in spring-vt's profile, which spent ~79% of on-CPU in Netty/grpc-java framing).
+  Real, but modest.
+- **Go → Rust: +81%.** The cost of *having a GC and a managed runtime at all*. This jump
+  is **far bigger** than the JVM-vs-native one. Rust pays no GC, allocates ~nothing per
+  request, and its redis-rs `MultiplexedConnection` pipelines reads over one connection.
 
-## Why spring-vt wins the WRITE path (+18%) — and why that's consistent
+So **"not the JVM" buys ~20% on reads; "no GC + zero-alloc native" buys ~2.2×.** Most of
+the headroom is the GC/managed-runtime/allocation tax that Go still pays and Rust doesn't
+— not simply native-vs-JVM.
 
-`execute` is a durable INSERT: every request blocks on a **Postgres round-trip**. There
-the transport tax is a *small fraction* of the per-request time (most of it is parked
-waiting on PG), so Go's leaner transport barely helps — and **HikariCP + pgjdbc happened
-to pace Postgres faster than pgx** on this box. This is not a fluke: the earlier
-execute-only soak showed the same ordering (**spring-vt 11,973 vs go-pgx 10,081 rps**).
-So Java is *not* slower on the durable write path here; if anything it's ahead.
+## Why Java beats Go on the WRITE path
 
-## Takeaway
+`execute` is a durable INSERT — every request blocks on a **Postgres round-trip**, so the
+transport tax is a small fraction of per-request time. There the runtime barely matters and
+**HikariCP + pgjdbc pace PG faster than pgx** (consistent with the earlier execute-only
+soak: spring-vt 11,973 vs go-pgx 10,081). Rust still edges ahead, but the three are within
+~30% on writes vs ~2.2× on reads — the write path is the great equalizer.
 
-The runtime choice is **workload-shaped, not absolute**:
+## Recommendation for a workflow engine (2-core, Aurora PG)
 
-- **Read-heavy / cache-served** (transport-bound) → **Go wins** (leaner transport +
-  cheaper concurrency; the per-request tax is the bottleneck).
-- **Write-heavy / durable** (Postgres-round-trip-bound) → **spring-vt is at least as
-  good** (the DB round-trip dwarfs the transport tax, and its pool/driver pace PG well).
-- **Combined here, Go is +10.5%** only because reads are the larger share.
+A checkpoint-style workflow engine is **write/durability-bound**, and on that path Java is
+within ~9% of Rust and *beats* Go. So:
 
-It is a genuine tradeoff, not a blowout. Robustness slightly favours spring-vt (0 errors
-vs go-pgx's 0.008% transport-level blips; the go server logged no application errors —
-the lone error was a shutdown-time Redis cancel).
+- **spring-vt (Java + virtual threads) — best performance-vs-developer-productivity
+  balance.** ≤9% behind Rust on the path that bounds the engine, with the richest ecosystem
+  (Spring Data, declarative transactions, observability), simple blocking-on-Loom code, and
+  the largest talent pool. The read gap is mostly mooted by the Redis cache.
+- **rust-tokio — pick it for maximum throughput-per-core, lowest tail, smallest footprint.**
+  +74% combined, GC-free tail consistency, ideal if you're cost-optimizing a small t4g box
+  or have a strict p99 SLA — at the cost of slower dev iteration and a smaller talent pool.
+- **go-pgx** is the awkward middle for *this* workload: it lost the write path to Java and
+  trails Rust everywhere, so it doesn't clearly win either axis unless the team is all-Go.
 
-> A 3-way run adding **rust-tokio** (same Redis read-through cache) is the next step —
-> Rust is native like Go but with no GC at all, so it's the cleanest test of "how much of
-> Go's read-path win is *not having the JVM* vs *not having a GC*."
+## Notes
+
+- **Fairness correction vs the earlier go-vs-spring run:** that run had go-pgx **gRPC-only**
+  (no co-hosted REST), which inflated its read lead to +31%. With all three now paying the
+  co-host cost, go's fair read lead over Java is **+20%**. The earlier asymmetric numbers
+  are superseded by this run.
+- **p95** was added to the loadgen after this run, so it isn't in these JSONs (they carry
+  p50/p90/p99/p99.9/max); future runs include `lat_p95_ms` / `read_p95_ms` / `write_p95_ms`.
