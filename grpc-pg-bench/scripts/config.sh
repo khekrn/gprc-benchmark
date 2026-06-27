@@ -28,6 +28,14 @@ export SPRING_VT_ADDR="${SPRING_VT_HOST}:${SPRING_VT_PORT}"
 # co-hosted in the same JVM. This is its HTTP port (gRPC stays on SPRING_VT_PORT).
 # The external health pinger (scripts/health_ping.sh) hits http://host:PORT/health.
 export SPRING_VT_HTTP_PORT="${SPRING_VT_HTTP_PORT:-8080}"
+# spring-vt optional Redis (Lettuce) read-through cache for workflow_state. OFF by
+# default (REDIS_ENABLED unset => NoOp cache, PG only). Turn on + tune for the
+# t4g.medium target. REDIS_POOL_ENABLED toggles the shared-conn vs commons-pool2 A/B.
+export REDIS_ENABLED="${REDIS_ENABLED:-false}"
+export REDIS_HOST="${REDIS_HOST:-127.0.0.1}"
+export REDIS_PORT="${REDIS_PORT:-6379}"
+export REDIS_TTL_SECONDS="${REDIS_TTL_SECONDS:-300}"
+export REDIS_POOL_ENABLED="${REDIS_POOL_ENABLED:-false}"
 # Spring Boot gRPC + Kotlin coroutines + R2DBC (reactive).
 export SPRING_RT_HOST="${SPRING_RT_HOST:-127.0.0.1}"
 export SPRING_RT_PORT="${SPRING_RT_PORT:-50058}"

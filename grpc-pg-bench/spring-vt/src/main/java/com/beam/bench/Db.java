@@ -52,15 +52,20 @@ public class Db {
     private final DataSource ds;
     private final JdbcClient jdbc;
     private final TransactionTemplate tx;
+    // Read-through cache for workflow_state: RedisStateCache when
+    // bench.redis.enabled=true, else NoOpStateCache (every read hits Postgres, so
+    // the original spring-vt behaviour is unchanged).
+    private final StateCache cache;
     // Default data layer is Spring's JdbcClient (the "spring-jdbc" abstraction —
     // fluent, ~1-5% over raw JDBC, far cheaper than JPA/Exposed). Set DB_IMPL=raw
     // to fall back to hand-written raw JDBC (used for the abstraction-cost A/B).
     private final boolean useJdbcClient = !"raw".equalsIgnoreCase(System.getenv("DB_IMPL"));
 
-    Db(DataSource ds, JdbcClient jdbc, PlatformTransactionManager txManager) {
+    Db(DataSource ds, JdbcClient jdbc, PlatformTransactionManager txManager, StateCache cache) {
         this.ds = ds;
         this.jdbc = jdbc;
         this.tx = new TransactionTemplate(txManager);
+        this.cache = cache;
     }
 
     /** Single autocommit INSERT; returns the generated id. */
@@ -93,14 +98,19 @@ public class Db {
     long executeTx(String workflowId, String commandType, String payload,
                    long seq, long checksum) throws SQLException {
         if (useJdbcClient) {
-            return tx.execute(status -> {
-                long id = jdbc.sql(INSERT_COMMAND_SQL)
+            long id = tx.execute(status -> {
+                long generated = jdbc.sql(INSERT_COMMAND_SQL)
                         .param(workflowId).param(commandType).param(payload).param(seq).param(checksum)
                         .query(Long.class).single();
                 jdbc.sql(UPSERT_STATE_SQL).param(workflowId).param(commandType).update();
                 jdbc.sql(INSERT_OUTBOX_SQL).param(workflowId).param(commandType).param(payload).update();
-                return id;
+                return generated;
             });
+            // workflow_state changed → drop the cached entry (cache-aside on write);
+            // the next getState repopulates from PG. TTL is the backstop if this DEL
+            // is lost. Done after commit so a rolled-back TX never evicts.
+            cache.invalidate(workflowId);
+            return id;
         }
         try (Connection c = ds.getConnection()) {
             c.setAutoCommit(false);
@@ -129,6 +139,7 @@ public class Db {
                     ps.executeUpdate();
                 }
                 c.commit();
+                cache.invalidate(workflowId); // cache-aside eviction, post-commit
                 return id;
             } catch (SQLException | RuntimeException e) {
                 c.rollback();
@@ -139,8 +150,27 @@ public class Db {
         }
     }
 
-    /** Single-row read by workflow_id; {@link StateRow#MISSING} if absent. */
+    /**
+     * Single-row read by workflow_id, read-through the {@link StateCache}:
+     * cache hit returns immediately; on a miss we read Postgres and, if the row
+     * exists, populate the cache (misses are not cached — a workflow appears
+     * exactly once and we don't want to cache "absent"). {@link StateRow#MISSING}
+     * if absent. With the NoOp cache this is byte-for-byte the original PG read.
+     */
     StateRow getState(String workflowId) throws SQLException {
+        StateRow cached = cache.get(workflowId);
+        if (cached != null) {
+            return cached;
+        }
+        StateRow row = queryState(workflowId);
+        if (row.found()) {
+            cache.put(workflowId, row);
+        }
+        return row;
+    }
+
+    /** The Postgres read behind {@link #getState} (no caching). */
+    private StateRow queryState(String workflowId) throws SQLException {
         if (useJdbcClient) {
             return jdbc.sql(SELECT_STATE_SQL).param(workflowId)
                     .query((rs, rowNum) -> new StateRow(true, workflowId,

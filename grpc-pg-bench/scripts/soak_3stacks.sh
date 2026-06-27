@@ -65,7 +65,10 @@ start_server(){
     go-pgx)     PORT=50051; LISTEN_ADDR=127.0.0.1:$PORT GOMAXPROCS=2 taskset -c 2,3 "$ROOT/bin/go-server"   >"$OUT/$1.server.log" 2>&1 & SRV_PID=$! ;;
     go-gorm)    PORT=50054; LISTEN_ADDR=127.0.0.1:$PORT GOMAXPROCS=2 taskset -c 2,3 "$ROOT/bin/go-gorm-server" >"$OUT/$1.server.log" 2>&1 & SRV_PID=$! ;;
     rust-tokio) PORT=50053; LISTEN_ADDR=127.0.0.1:$PORT RUST_WORKER_THREADS=2 taskset -c 2,3 "$ROOT/bin/rust-server" >"$OUT/$1.server.log" 2>&1 & SRV_PID=$! ;;
-    spring-vt)  PORT=50056; HTTP_PORT="${SPRING_VT_HTTP_PORT:-8080}" LISTEN_PORT=$PORT taskset -c 2,3 java "${SPRING_VT_JVM_OPTS[@]}" -jar "$ROOT/bin/spring-vt-bench.jar" >"$OUT/$1.server.log" 2>&1 & SRV_PID=$! ;;
+    spring-vt)  PORT=50056; HTTP_PORT="${SPRING_VT_HTTP_PORT:-8080}" LISTEN_PORT=$PORT \
+                  REDIS_ENABLED="${REDIS_ENABLED:-false}" REDIS_HOST="${REDIS_HOST:-127.0.0.1}" REDIS_PORT="${REDIS_PORT:-6379}" \
+                  REDIS_TTL_SECONDS="${REDIS_TTL_SECONDS:-300}" REDIS_POOL_ENABLED="${REDIS_POOL_ENABLED:-false}" \
+                  taskset -c 2,3 java "${SPRING_VT_JVM_OPTS[@]}" -jar "$ROOT/bin/spring-vt-bench.jar" >"$OUT/$1.server.log" 2>&1 & SRV_PID=$! ;;
     spring-data-jdbc) PORT=50060; taskset -c 2,3 java "${JVM_OPTS[@]}" -jar "$ROOT/bin/spring-data-jdbc-bench.jar" >"$OUT/$1.server.log" 2>&1 & SRV_PID=$! ;;
     spring-rt)  PORT=50058; taskset -c 2,3 java "${SPRING_RT_JVM_OPTS[@]}" -jar "$ROOT/bin/spring-rt-bench.jar" >"$OUT/$1.server.log" 2>&1 & SRV_PID=$! ;;
   esac

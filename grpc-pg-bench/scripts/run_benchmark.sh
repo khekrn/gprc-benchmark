@@ -159,6 +159,8 @@ start_server() {
       # and HTTP_PORT for the co-hosted Jetty REST server (server.port).
       # shellcheck disable=SC2086
       LISTEN_HOST="${SPRING_VT_HOST}" LISTEN_PORT="${SPRING_VT_PORT}" HTTP_PORT="${SPRING_VT_HTTP_PORT}" \
+        REDIS_ENABLED="${REDIS_ENABLED:-false}" REDIS_HOST="${REDIS_HOST:-127.0.0.1}" REDIS_PORT="${REDIS_PORT:-6379}" \
+        REDIS_TTL_SECONDS="${REDIS_TTL_SECONDS:-300}" REDIS_POOL_ENABLED="${REDIS_POOL_ENABLED:-false}" \
         ${memcap[@]+"${memcap[@]}"} \
         ${SERVER_PIN[@]+"${SERVER_PIN[@]}"} java ${SPRING_VT_JVM_OPTS} -jar "${ROOT_DIR}/bin/spring-vt-bench.jar" \
         >> "${RUN_DIR}/${stack}.server.log" 2>&1 &
