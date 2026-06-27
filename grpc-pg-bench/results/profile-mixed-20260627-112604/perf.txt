@@ -1,0 +1,14 @@
+
+ Performance counter stats for process id '42525':
+
+   116,802,490,738      instructions                                                            (83.38%)
+   265,689,994,987      cycles                                                                  (83.46%)
+    16,036,972,660      cache-references                                                        (83.29%)
+     3,604,545,529      cache-misses                                                            (83.16%)
+         1,059,457      context-switches                                                      
+            25,168      cpu-migrations                                                        
+    41,757,278,094      L1-dcache-loads                                                         (83.39%)
+     5,188,434,421      L1-dcache-load-misses                                                   (83.32%)
+
+      40.004872211 seconds time elapsed
+
