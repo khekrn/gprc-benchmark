@@ -7,10 +7,11 @@
 //! to pay for), and it exposes the exact flow-control / keepalive / nodelay
 //! settings the Go server tunes — so this is both simpler and on equal footing.
 
+use std::net::SocketAddr;
 use std::time::Duration;
 
 use tonic::transport::Server;
-use tracing::info;
+use tracing::{error, info};
 
 use crate::config::Config;
 use crate::db::Db;
@@ -18,6 +19,12 @@ use crate::proto::bench_v1::command_service_server::CommandServiceServer;
 use crate::service::CommandSvc;
 
 pub async fn serve(cfg: &Config, db: Db) -> Result<(), Box<dyn std::error::Error>> {
+    // Co-hosted REST /health (axum) — fairness with spring-vt's co-hosted Jetty.
+    // It runs on the SAME tokio runtime as gRPC, so the two surfaces contend for
+    // the 2 worker threads (the co-host cost we want to measure), exactly as
+    // grpc-netty + Jetty contend in spring-vt's JVM. Plain 200 "UP", no work.
+    spawn_health_server(cfg.http_port);
+
     let svc = CommandServiceServer::new(CommandSvc::new(db));
 
     // Standard gRPC health service — wired up for parity with what we'd ship,
@@ -55,6 +62,26 @@ pub async fn serve(cfg: &Config, db: Db) -> Result<(), Box<dyn std::error::Error
 
     info!("graceful stop complete");
     Ok(())
+}
+
+/// Spawn the co-hosted REST /health server (axum) as a background task on the
+/// same runtime. `GET /health` -> 200 "UP", no work — so any latency a client
+/// sees while gRPC saturates the cores is co-host contention, not the handler.
+/// Bind failure is logged but non-fatal (gRPC is the primary surface).
+fn spawn_health_server(http_port: u16) {
+    let addr = SocketAddr::from(([0, 0, 0, 0], http_port));
+    tokio::spawn(async move {
+        let app = axum::Router::new().route("/health", axum::routing::get(|| async { "UP" }));
+        match tokio::net::TcpListener::bind(addr).await {
+            Ok(listener) => {
+                info!(http_port, "co-hosted REST /health (axum) listening");
+                if let Err(e) = axum::serve(listener, app).await {
+                    error!(error = %e, "axum health server stopped");
+                }
+            }
+            Err(e) => error!(error = %e, %addr, "axum health server failed to bind"),
+        }
+    });
 }
 
 /// Resolves on SIGTERM or SIGINT. tonic's `serve_with_shutdown` then stops

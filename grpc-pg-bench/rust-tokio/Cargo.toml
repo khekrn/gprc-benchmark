@@ -15,6 +15,18 @@ tonic-health       = "0.12"
 prost              = "0.13"
 tokio-postgres     = "0.7"
 deadpool-postgres  = "0.14"
+# Redis read-through cache for GetState (REDIS_ENABLED=true), the Rust twin of
+# spring-vt's RedisStateCache / go-pgx's go-redis. redis-rs MultiplexedConnection
+# is the closest analog to Lettuce's shared, pipelined single connection.
+redis              = { version = "0.27", features = ["tokio-comp"] }
+# Co-hosted REST /health, for fairness with spring-vt's co-hosted Jetty endpoint.
+# axum 0.7 rides the same hyper 1.x + tokio that tonic 0.12 uses, so the gRPC and
+# HTTP servers share one runtime (two surfaces contending for the 2 workers — the
+# co-host cost we want to measure).
+axum               = "0.7"
+# Pin each tokio worker to a core (cache locality on the 2-core box). Gated by
+# RUST_PIN_CORES; under taskset -c 2,3 the visible core set is just {2,3}.
+core_affinity      = "0.8"
 tracing            = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # In-process instrumentation profiler (no perf/root/kernel settings needed —

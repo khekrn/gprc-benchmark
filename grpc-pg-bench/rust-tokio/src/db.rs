@@ -11,6 +11,8 @@ use deadpool_postgres::{
 use tokio_postgres::NoTls;
 use tonic::Status;
 
+use crate::cache::StateCache;
+
 // SQL kept byte-identical to go-pgx/main.go and the JVM stacks so every stack
 // hits the planner with the same prepared-statement text and the same plan.
 const INSERT_COMMAND_SQL: &str = "INSERT INTO commands (workflow_id, command_type, payload, seq, checksum) VALUES ($1, $2, $3, $4, $5) RETURNING id";
@@ -32,6 +34,9 @@ pub struct StateRow {
 #[derive(Clone)]
 pub struct Db {
     pool: Pool,
+    /// Read-through cache for workflow_state: `Some` when REDIS_ENABLED=true,
+    /// else `None` (every read hits Postgres — the original behaviour).
+    cache: Option<StateCache>,
 }
 
 impl Db {
@@ -54,7 +59,14 @@ impl Db {
         cfg.pool = Some(pool_cfg);
 
         let pool = cfg.create_pool(Some(Runtime::Tokio1), NoTls)?;
-        Ok(Self { pool })
+        Ok(Self { pool, cache: None })
+    }
+
+    /// Attach (or clear) the Redis read-through cache. Builder-style so `main`
+    /// can add it after `connect`/`warmup` only when REDIS_ENABLED=true.
+    pub fn with_cache(mut self, cache: Option<StateCache>) -> Self {
+        self.cache = cache;
+        self
     }
 
     /// Hold `n` connections open at startup, then release them, so the first
@@ -126,20 +138,36 @@ impl Db {
         tx.execute(&upsert, &[&workflow_id, &command_type]).await.map_err(internal)?;
         tx.execute(&outbox, &[&workflow_id, &command_type, &payload]).await.map_err(internal)?;
         tx.commit().await.map_err(internal)?;
+        // workflow_state changed → evict the cached entry (cache-aside on write);
+        // post-commit so a rolled-back TX never evicts. TTL is the backstop.
+        if let Some(cache) = &self.cache {
+            cache.invalidate(workflow_id).await;
+        }
         Ok(id)
     }
 
-    /// `GetState`: single lookup by workflow_id. `query_opt` returns `None`
-    /// for a missing row, which the service maps to `found = false`.
+    /// `GetState`: single lookup by workflow_id, read THROUGH the Redis cache
+    /// when enabled. Cache hit returns immediately; on a miss we read Postgres
+    /// and populate the cache for existing rows (misses are not cached).
+    /// `query_opt` returns `None` for a missing row → `found = false`.
     pub async fn get_state(&self, workflow_id: &str) -> Result<Option<StateRow>, Status> {
+        if let Some(cache) = &self.cache {
+            if let Some(row) = cache.get(workflow_id).await {
+                return Ok(Some(row));
+            }
+        }
         let client = self.get().await?;
         let stmt = client.prepare_cached(SELECT_STATE_SQL).await.map_err(internal)?;
         let row = client.query_opt(&stmt, &[&workflow_id]).await.map_err(internal)?;
-        Ok(row.map(|r| StateRow {
+        let result = row.map(|r| StateRow {
             state: r.get(0),
             version: r.get(1),
             updated_at_micros: r.get(2),
-        }))
+        });
+        if let (Some(cache), Some(row)) = (&self.cache, &result) {
+            cache.put(workflow_id, row).await;
+        }
+        Ok(result)
     }
 }
 
